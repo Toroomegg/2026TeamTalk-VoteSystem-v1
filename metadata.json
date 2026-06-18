@@ -1,0 +1,6 @@
+{
+  "name": "2026 TeamTalk",
+  "description": "A real-time high-tech product evaluation and souvenir reward distribution system built specifically for 2026 TeamTalk.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
