@@ -927,34 +927,63 @@ const ResultsPage: React.FC = () => {
                      <th className="px-4 py-3.5">姓名</th>
                      <th className="px-4 py-3.5">認證權限狀態</th>
                      <th className="px-4 py-3.5">投票/領取狀態</th>
+                     <th className="px-4 py-3.5">1. 印象最深刻產品</th>
+                     <th className="px-4 py-3.5">2. 最佳人氣產品</th>
+                     <th className="px-4 py-3.5">3. 最有前瞻性產品</th>
+                     <th className="px-4 py-3.5">選定紀念品</th>
+                     <th className="px-4 py-3.5">IP 來源位址</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 bg-slate-950/40">
-                  {filteredRoster.map((member) => (
-                    <tr key={member.id} className="hover:bg-[#121c4b]/30">
-                       <td className="px-4 py-3.5 font-bold text-[#73c8ce] font-mono">{member.id}</td>
-                       <td className="px-4 py-3.5 font-bold text-white">{member.name || '（未註明姓名，僅憑此工號登入）'}</td>
-                       <td className="px-4 py-3.5">
-                          <span className="bg-emerald-950/70 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full text-xs font-bold">
-                             ✔️ 允許驗證投票
-                          </span>
-                       </td>
-                       <td className="px-4 py-3.5 text-xs">
-                          {member.used ? (
-                            <span className="text-pink-400 font-bold bg-pink-950/60 border border-pink-500/30 px-2.5 py-1 rounded-lg">
-                               💖 已經完成投遞 (已鎖定且扣除紀念品)
+                  {filteredRoster.map((member) => {
+                    const detail = voteDetails.find(d => d.staffId.trim().toUpperCase() === member.id.trim().toUpperCase());
+                    return (
+                      <tr key={member.id} className="hover:bg-[#121c4b]/30">
+                         <td className="px-4 py-3.5 font-bold text-[#73c8ce] font-mono">{member.id}</td>
+                         <td className="px-4 py-3.5 font-bold text-white">{member.name || '（未註明姓名，僅憑此工號登入）'}</td>
+                         <td className="px-4 py-3.5">
+                            <span className="bg-emerald-950/70 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap">
+                               ✔️ 允許驗證投票
                             </span>
-                          ) : (
-                            <span className="text-slate-400 font-medium bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg">
-                               ⏳ 尚未參與投遞
-                            </span>
-                          )}
-                       </td>
-                    </tr>
-                  ))}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs whitespace-nowrap">
+                            {member.used ? (
+                              <span className="text-pink-400 font-bold bg-pink-950/60 border border-pink-500/30 px-2.5 py-1 rounded-lg">
+                                 💖 已經完成投遞 (已鎖定且扣除紀念品)
+                              </span>
+                            ) : (
+                              <span className="text-slate-400 font-medium bg-slate-900 border border-slate-800 px-2.5 py-1 rounded-lg">
+                                 ⏳ 尚未參與投遞
+                              </span>
+                            )}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">
+                           {detail ? getProductName(detail.singing) : <span className="text-slate-600 font-mono">-</span>}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">
+                           {detail ? getProductName(detail.popularity) : <span className="text-slate-600 font-mono">-</span>}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">
+                           {detail ? getProductName(detail.costume) : <span className="text-slate-600 font-mono">-</span>}
+                         </td>
+                         <td className="px-4 py-3.5">
+                           {detail ? (
+                             <span className="bg-sky-950/70 border border-sky-500/30 text-sky-300 px-2 py-1 rounded-md text-xs font-bold whitespace-nowrap">
+                               {detail.souvenirName}
+                             </span>
+                           ) : (
+                             <span className="text-slate-600 font-mono text-xs">-</span>
+                           )}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-500 font-mono">
+                           {detail ? detail.ip : <span className="text-slate-600 font-mono">-</span>}
+                         </td>
+                      </tr>
+                    );
+                  })}
                   {filteredRoster.length === 0 && (
                     <tr>
-                       <td colSpan={4} className="text-center py-10 text-slate-400 italic">
+                       <td colSpan={9} className="text-center py-10 text-slate-400 italic">
                           暫無符合篩選條件的工號，請至後台管理匯入員工清單。
                        </td>
                     </tr>
@@ -1101,7 +1130,10 @@ const AdminPage: React.FC = () => {
       ) : (
          <div className="max-w-7xl mx-auto">
             <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
-                <h1 className="text-3xl font-black text-[#73c8ce]">⚙️ TeamTalk 後台維護管理</h1>
+                <div>
+                    <h1 className="text-3xl font-black text-[#73c8ce]">⚙️ TeamTalk 後台維護管理</h1>
+                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.3.2 (更新日期: 2026-06-18)</p>
+                </div>
                 <button onClick={() => setIsAuthenticated(false)} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold shadow-md transition-colors">登出</button>
             </div>
 

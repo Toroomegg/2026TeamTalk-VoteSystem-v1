@@ -290,7 +290,6 @@ class VoteService {
       const updates: any = {};
       Object.keys(data).forEach(id => {
         updates[`staff_list/${id}/used`] = false;
-        updates[`staff_list/${id}/name`] = null;
       });
       updates['stats/masterKeyCount'] = 0;
       await update(ref(db), updates);
@@ -405,26 +404,39 @@ class VoteService {
   }
 
   async resetAllRemoteVotes() {
+    const updates: any = {};
+
+    // Reset candidates scores
     const snapshot = await get(ref(db, 'candidates'));
     if (snapshot.exists()) {
       const data = snapshot.val();
-      const updates: any = {};
       Object.keys(data).forEach(id => {
         updates[`candidates/${id}/scoreSinging`] = 0;
         updates[`candidates/${id}/scorePopularity`] = 0;
         updates[`candidates/${id}/scoreCostume`] = 0;
         updates[`candidates/${id}/voteCount`] = 0;
       });
-      updates['vote_details'] = null;
-      updates['stats/masterKeyCount'] = 0;
-      
-      // Reset souvenirs quantities to default demo counts
-      updates['souvenirs/souvenir_1/quantity'] = 150;
-      updates['souvenirs/souvenir_2/quantity'] = 100;
-      updates['souvenirs/souvenir_3/quantity'] = 50;
-
-      await update(ref(db), updates);
     }
+
+    // Clear votes, logs, stats
+    updates['vote_details'] = null;
+    updates['stats/masterKeyCount'] = 0;
+    
+    // Reset souvenirs quantities to default demo counts
+    updates['souvenirs/souvenir_1/quantity'] = 150;
+    updates['souvenirs/souvenir_2/quantity'] = 100;
+    updates['souvenirs/souvenir_3/quantity'] = 50;
+
+    // Reset all staff members' used status to false (preserves names!)
+    const staffSnapshot = await get(ref(db, 'staff_list'));
+    if (staffSnapshot.exists()) {
+      const staffData = staffSnapshot.val();
+      Object.keys(staffData).forEach(id => {
+        updates[`staff_list/${id}/used`] = false;
+      });
+    }
+
+    await update(ref(db), updates);
   }
 
   // --- Products CRUD (candidates) ---
