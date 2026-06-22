@@ -141,11 +141,17 @@ const StaffIdModal: React.FC<{
 const SouvenirSelectionModal: React.FC<{
     isOpen: boolean;
     souvenirs: Souvenir[];
-    onConfirm: (souvenirId: string, souvenirName: string) => void;
+    onConfirm: (souvenirId: string, souvenirName: string, backupSouvenirId?: string | null, backupSouvenirName?: string | null) => void;
     onCancel: () => void;
     isSubmitting: boolean;
 }> = ({ isOpen, souvenirs, onConfirm, onCancel, isSubmitting }) => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
+    const [backupId, setBackupId] = useState<string | null>(null);
+
+    // Reset backup selection whenever the primary choice changes
+    useEffect(() => {
+        setBackupId(null);
+    }, [selectedId]);
 
     if (!isOpen) return null;
 
@@ -153,7 +159,7 @@ const SouvenirSelectionModal: React.FC<{
 
     return (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
-            <div className="glass-panel p-8 rounded-[2.5rem] max-w-md w-full border-2 border-sky-400/30 shadow-[0_0_50px_rgba(115,200,206,0.2)] text-white">
+            <div className="glass-panel p-8 rounded-[2.5rem] max-w-md w-full border-2 border-sky-400/30 shadow-[0_0_50px_rgba(115,200,206,0.2)] text-white max-h-[85vh] overflow-y-auto">
                 <h3 className="text-2xl font-black text-center mb-1 text-[#73c8ce]">🎁 恭喜！選擇您的活動紀念品</h3>
                 <p className="text-slate-400 text-center text-xs mb-6">每位員工限領一份，送出後即時扣減存量</p>
                 
@@ -205,11 +211,45 @@ const SouvenirSelectionModal: React.FC<{
                     })}
                 </div>
 
+                {/* Warning and backup option selection if quantity is extremely low (<= 10) */}
+                {selectedSouvenir && selectedSouvenir.quantity <= 10 && selectedSouvenir.quantity > 0 && (
+                    <div className="bg-amber-950/70 border border-amber-500/40 p-4 rounded-2xl mb-5 text-xs text-amber-300 leading-relaxed shadow-lg">
+                        <div className="flex items-center gap-2 font-bold text-amber-400 mb-1">
+                            <span>⚠️</span>
+                            <span>現場庫存緊張警示 (剩餘 &le; 10 份)</span>
+                        </div>
+                        您選擇的「<strong className="text-white">{selectedSouvenir.name}</strong>」目前現場僅剩 <strong className="text-amber-400 font-mono text-sm">{selectedSouvenir.quantity}</strong> 份！
+                        在您點擊送出的瞬間，可能因多位同仁併發搶兌而在此刻份數耗盡。
+                        <br />
+                        <span className="font-bold text-white">建議您預設「第二順位備選紀念品」：</span>
+                        
+                        <div className="mt-3">
+                            <select 
+                               value={backupId || ""} 
+                               onChange={(e) => setBackupId(e.target.value || null)}
+                               className="w-full bg-slate-950 border border-amber-500/30 text-white rounded-xl p-2.5 text-xs focus:outline-none focus:border-amber-400 font-bold"
+                            >
+                               <option value="">-- 無（若首選缺貨，則彈出提示另由人工選取）--</option>
+                               {souvenirs.filter(s => s.id !== selectedId && s.quantity > 0).map(s => (
+                                 <option key={s.id} value={s.id}>
+                                   {s.name} (剩餘 {s.quantity} 份)
+                                 </option>
+                               ))}
+                            </select>
+                        </div>
+                    </div>
+                )}
+
                 <div className="flex gap-3">
                     <button onClick={onCancel} className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">修改前台選票</button>
                     <button 
                         disabled={!selectedId || isSubmitting}
-                        onClick={() => selectedSouvenir && onConfirm(selectedId, selectedSouvenir.name)}
+                        onClick={() => {
+                            if (selectedSouvenir) {
+                                const backupSouvenir = souvenirs.find(s => s.id === backupId);
+                                onConfirm(selectedId, selectedSouvenir.name, backupId, backupSouvenir?.name);
+                            }
+                        }}
                         className={`flex-1 py-3.5 rounded-xl font-black transition-all text-center ${
                             selectedId && !isSubmitting
                               ? 'bg-gradient-to-r from-[#73c8ce] to-[#202d98] text-white active:scale-95 shadow-md' 
@@ -342,6 +382,7 @@ const VotePage: React.FC = () => {
   const [voterStaffId, setVoterStaffId] = useState('');
   const [clientIp, setClientIp] = useState("Unknown");
   const [justVoted, setJustVoted] = useState(false);
+  const [finalAwardedName, setFinalAwardedName] = useState('');
 
   const [detailModal, setDetailModal] = useState<{ candidate: Candidate | null, category: VoteCategory | null, categoryTitle: string } | null>(null);
 
@@ -408,7 +449,12 @@ const VotePage: React.FC = () => {
   };
 
   // Step 3: submit full payload (vote answers + verified staff info + chosen souvenir) to Firebase 
-  const handleConfirmFullSubmission = async (souvenirId: string, souvenirName: string) => {
+  const handleConfirmFullSubmission = async (
+    souvenirId: string, 
+    souvenirName: string,
+    backupId?: string | null,
+    backupName?: string | null
+  ) => {
       setIsSubmitting(true);
       const result = await voteService.submitVoteBatch(
          selections as any,
@@ -416,12 +462,15 @@ const VotePage: React.FC = () => {
          voterName,
          souvenirId,
          souvenirName,
-         clientIp
+         clientIp,
+         backupId,
+         backupName
       );
       setIsSubmitting(false);
 
       if (result.success) {
           setIsSouvenirModalOpen(false);
+          setFinalAwardedName(result.chosenSouvenirName || souvenirName);
           setJustVoted(true);
           window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
@@ -436,14 +485,19 @@ const VotePage: React.FC = () => {
               <div className="glass-panel p-10 rounded-3xl text-center max-w-md border border-sky-400/50 shadow-2xl">
                   <div className="text-7xl mb-6 animate-bounce">🎁</div>
                   <h1 className="text-3xl font-black text-[#73c8ce] mb-4">投票與對獎成功！</h1>
-                  <p className="text-slate-300 text-base mb-6">您的紀念品與評選結果已完美上傳及扣除存量。</p>
+                  <p className="text-slate-300 text-base mb-2">您的紀念品與評選結果已完美上傳及扣除存量。</p>
+                  
+                  <div className="my-5 bg-sky-500/10 border border-[#73c8ce]/30 text-[#73c8ce] px-5 py-3 rounded-2xl font-bold inline-block text-sm">
+                     已鎖定兌換：{finalAwardedName || "選定的紀念品"}
+                  </div>
+
                   <p className="text-xs text-slate-500 mb-8 font-mono">您的來源 IP: {clientIp}</p>
                   
                   <button 
                     onClick={() => { setJustVoted(false); setSelections({SINGING:null, POPULARITY:null, COSTUME:null}); }}
-                    className="bg-gradient-to-r from-sky-400 to-[#202d98] hover:to-sky-500 text-white px-8 py-3 rounded-full text-sm font-bold transition-all active:scale-95 shadow-lg"
+                    className="bg-gradient-to-r from-sky-400 to-[#202d98] hover:to-sky-500 text-white px-8 py-3 rounded-full text-sm font-bold transition-all active:scale-95 shadow-lg w-full"
                   >
-                    返回前台 (測試多次)
+                    返回前台 (測試多筆量)
                   </button>
               </div>
           </div>
@@ -1132,7 +1186,7 @@ const AdminPage: React.FC = () => {
             <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-black text-[#73c8ce]">⚙️ TeamTalk 後台維護管理</h1>
-                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.3.2 (更新日期: 2026-06-18)</p>
+                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.3.3 (更新日期: 2026-06-22)</p>
                 </div>
                 <button onClick={() => setIsAuthenticated(false)} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold shadow-md transition-colors">登出</button>
             </div>

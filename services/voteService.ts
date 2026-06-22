@@ -1,4 +1,4 @@
-import { ref, onValue, set, update, remove, Unsubscribe, get, increment } from "firebase/database";
+import { ref, onValue, set, update, remove, Unsubscribe, get, increment, runTransaction } from "firebase/database";
 import { db } from "./firebase";
 import { Candidate, COLORS, VoteCategory, Souvenir, VoteDetail, StaffMember } from '../types';
 
@@ -298,14 +298,35 @@ class VoteService {
     return { success: false, message: "無工號資料可重置。" };
   }
 
+  private async tryDeductSouvenir(souvenirId: string): Promise<{ success: boolean }> {
+    const qtyRef = ref(db, `souvenirs/${souvenirId}/quantity`);
+    try {
+      const result = await runTransaction(qtyRef, (currentQty) => {
+        if (currentQty === null) {
+          return null; // Let Firebase sync the authentic value first
+        }
+        if (typeof currentQty !== 'number' || currentQty <= 0) {
+          return undefined; // Abort if out of stock or invalid
+        }
+        return currentQty - 1;
+      });
+      return { success: result.committed };
+    } catch (e) {
+      console.error("Deduct quantity transaction failed:", e);
+      return { success: false };
+    }
+  }
+
   async submitVoteBatch(
     votes: { [key in VoteCategory]: string }, 
     rawStaffId: string, 
     voterName: string,
     souvenirId: string,
     souvenirName: string,
-    clientIp: string = "Unknown"
-  ): Promise<{ success: boolean; message?: string }> {
+    clientIp: string = "Unknown",
+    backupSouvenirId?: string | null,
+    backupSouvenirName?: string | null
+  ): Promise<{ success: boolean; message?: string; chosenSouvenirName?: string }> {
     if (!this.isVotingOpen) return { success: false, message: "投票通道已關閉。" };
     
     const staffId = rawStaffId.trim().toUpperCase();
@@ -330,16 +351,32 @@ class VoteService {
     }
 
     try {
-      // Check souvenir stock
-      const souvenirRef = ref(db, `souvenirs/${souvenirId}`);
-      const souvenirSnap = await get(souvenirRef);
-      if (souvenirSnap.exists()) {
-        const qty = souvenirSnap.val().quantity || 0;
-        if (qty <= 0) {
-          return { success: false, message: `紀念品 「${souvenirName}」 已發放完畢，請選擇其他款式。` };
+      let finalSouvenirId = souvenirId;
+      let finalSouvenirName = souvenirName;
+      let isBackupUsed = false;
+
+      // Deduct souvenir atomically using a transaction
+      const deductResult = await this.tryDeductSouvenir(souvenirId);
+      if (!deductResult.success) {
+        // First choice out of stock. Check if backup choice is available.
+        if (backupSouvenirId && backupSouvenirName && backupSouvenirId !== souvenirId) {
+          const backupDeduct = await this.tryDeductSouvenir(backupSouvenirId);
+          if (backupDeduct.success) {
+            finalSouvenirId = backupSouvenirId;
+            finalSouvenirName = backupSouvenirName;
+            isBackupUsed = true;
+          } else {
+            return { 
+              success: false, 
+              message: `很抱歉，首選紀念品「${souvenirName}」與備選紀念品「${backupSouvenirName}」皆已兌換完畢，請重新進行投票選購。` 
+            };
+          }
+        } else {
+          return { 
+            success: false, 
+            message: `很抱歉，您選取的紀念品「${souvenirName}」已被他人搶先兌換完畢！請重新選購。` 
+          };
         }
-      } else {
-        return { success: false, message: "選擇的紀念品型號不存在！" };
       }
 
       const updates: any = {};
@@ -351,8 +388,8 @@ class VoteService {
         singing: votes[VoteCategory.SINGING],
         popularity: votes[VoteCategory.POPULARITY],
         costume: votes[VoteCategory.COSTUME],
-        souvenirId: souvenirId,
-        souvenirName: souvenirName,
+        souvenirId: finalSouvenirId,
+        souvenirName: finalSouvenirName,
         ip: clientIp,
         timestamp: Date.now()
       };
@@ -363,9 +400,6 @@ class VoteService {
           updates[`staff_list/${staffId}/used`] = true;
           updates[`staff_list/${staffId}/name`] = voterName;
       }
-
-      // Decrement souvenir quantity
-      updates[`souvenirs/${souvenirId}/quantity`] = increment(-1);
 
       // Add vote ticks
       const categories = [VoteCategory.SINGING, VoteCategory.POPULARITY, VoteCategory.COSTUME];
@@ -384,7 +418,10 @@ class VoteService {
 
       await update(ref(db), updates);
       
-      return { success: true };
+      return { 
+        success: true, 
+        chosenSouvenirName: finalSouvenirName 
+      };
     } catch (e: any) {
       return { success: false, message: e.message };
     }
