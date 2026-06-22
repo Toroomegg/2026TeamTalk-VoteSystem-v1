@@ -1369,6 +1369,13 @@ const AppLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     voteService.startPolling();
     const update = () => {
       setBgUrl(voteService.bgUrl || "");
+      
+      // Dynamically update the website tab's favicon icon to match the custom logo
+      const currentLogo = voteService.logoUrl || "/logo.png";
+      const faviconLink = document.getElementById('dynamic-favicon') as HTMLLinkElement;
+      if (faviconLink) {
+        faviconLink.href = currentLogo;
+      }
     };
     update();
     const unsub = voteService.subscribe(update);
