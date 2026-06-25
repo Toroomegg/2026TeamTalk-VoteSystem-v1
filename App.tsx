@@ -796,6 +796,110 @@ const ResultsPage: React.FC = () => {
     return candidates.find(c => c.id === idToLookUp)?.name || "未知隨機產品";
   };
 
+  const handleExportData = () => {
+    const escapeCsvValue = (val: string) => {
+      if (val === undefined || val === null) return "";
+      const stringified = String(val);
+      if (stringified.includes(",") || stringified.includes('"') || stringified.includes("\n") || stringified.includes("\r")) {
+        return `"${stringified.replace(/"/g, '""')}"`;
+      }
+      return stringified;
+    };
+
+    let headers: string[] = [];
+    let rows: string[][] = [];
+    let filenamePrefix = "";
+
+    if (activeTab === 'votes') {
+      if (filteredDetails.length === 0) {
+        alert("目前選取的投票投遞詳情無任何資料可供匯出！");
+        return;
+      }
+      filenamePrefix = "2026_TeamTalk_評選投票投遞詳情";
+      headers = [
+        "工號",
+        "姓名",
+        "部門標籤 / 類別",
+        "1. 最佳造型設計產品 (原歌唱)",
+        "2. 最佳人氣產品",
+        "3. 最有前瞻性產品 (原造型)",
+        "選定紀念品",
+        "投票時間",
+        "投票來源IP"
+      ];
+      rows = filteredDetails.map((detail) => {
+        const memberInfo = staffRoster.find(s => s.id.trim().toUpperCase() === detail.staffId.trim().toUpperCase());
+        const voteDate = new Date(detail.timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+        return [
+          detail.staffId,
+          detail.name,
+          memberInfo?.tag || "",
+          getProductName(detail.singing),
+          getProductName(detail.popularity),
+          getProductName(detail.costume),
+          detail.souvenirName,
+          voteDate,
+          detail.ip || ""
+        ];
+      });
+    } else {
+      if (filteredRoster.length === 0) {
+        alert("目前選取的已匯入名單無任何資料可供匯出！");
+        return;
+      }
+      filenamePrefix = "2026_TeamTalk_已匯入員工名單狀態";
+      headers = [
+        "專屬工號",
+        "姓名",
+        "部門標籤 / 類別",
+        "認證權限狀態",
+        "投票/領取狀態",
+        "1. 最佳造型設計產品",
+        "2. 最佳人氣產品",
+        "3. 最有前瞻性產品",
+        "選定紀念品",
+        "投票時間",
+        "投票來源IP"
+      ];
+      rows = filteredRoster.map((member) => {
+        const detail = voteDetails.find(d => d.staffId.trim().toUpperCase() === member.id.trim().toUpperCase());
+        const voteDate = detail ? new Date(detail.timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' }) : "";
+        return [
+          member.id,
+          member.name || "",
+          member.tag || "",
+          "允許驗證投票",
+          member.used ? "已經完成投遞 (已扣除紀念品)" : "尚未參與投遞",
+          detail ? getProductName(detail.singing) : "",
+          detail ? getProductName(detail.popularity) : "",
+          detail ? getProductName(detail.costume) : "",
+          detail ? detail.souvenirName : "",
+          voteDate,
+          detail ? (detail.ip || "") : ""
+        ];
+      });
+    }
+
+    const csvContent = "\uFEFF" + [
+      headers.map(escapeCsvValue).join(","),
+      ...rows.map(row => row.map(escapeCsvValue).join(","))
+    ].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, '0')}${now.getDate().toString().padStart(2, '0')}_${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}`;
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `${filenamePrefix}_${dateStr}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const filteredDetails = voteDetails.filter(d => 
     d.staffId.toLowerCase().includes(searchTerm.toLowerCase()) ||
     d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -1108,6 +1212,14 @@ const ResultsPage: React.FC = () => {
                 placeholder="搜尋工號、姓名..."
                 className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-[#73c8ce] outline-none w-full sm:w-48"
               />
+
+              <button
+                type="button"
+                onClick={handleExportData}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 whitespace-nowrap border border-emerald-500/20"
+              >
+                📥 匯出 Excel (CSV)
+              </button>
             </div>
           </div>
 
