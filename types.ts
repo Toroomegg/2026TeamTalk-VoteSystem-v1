@@ -6,7 +6,7 @@ export interface Candidate {
   videoLink?: string;  // 保留相容性
   
   // Scores
-  scoreSinging: number;    // A類別得票: 印象最深刻產品
+  scoreSinging: number;    // A類別得票: 最佳造型設計產品
   scorePopularity: number; // B類別得票: 最佳人氣產品
   scoreCostume: number;    // C類別得票: 最有前瞻性產品
   
@@ -27,7 +27,7 @@ export interface VoteDetail {
   id: string;
   staffId: string;
   name: string;
-  singing: string;      // 選擇的「印象最深刻產品」ID
+  singing: string;      // 選擇的「最佳造型設計產品」ID
   popularity: string;   // 選擇的「最佳人氣產品」ID
   costume: string;      // 選擇的「最有前瞻性產品」ID
   souvenirId: string;   // 選擇的紀念品 ID
@@ -43,7 +43,7 @@ export interface StaffMember {
 }
 
 export enum VoteCategory {
-  SINGING = 'SINGING',       // 印象最深刻產品 (原歌唱)
+  SINGING = 'SINGING',       // 最佳造型設計產品 (原歌唱)
   POPULARITY = 'POPULARITY', // 最佳人氣產品 (原人氣)
   COSTUME = 'COSTUME'        // 最有前瞻性產品 (原造型)
 }

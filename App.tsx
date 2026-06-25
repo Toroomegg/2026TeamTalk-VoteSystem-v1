@@ -141,21 +141,111 @@ const StaffIdModal: React.FC<{
 const SouvenirSelectionModal: React.FC<{
     isOpen: boolean;
     souvenirs: Souvenir[];
-    onConfirm: (souvenirId: string, souvenirName: string, backupSouvenirId?: string | null, backupSouvenirName?: string | null) => void;
+    onConfirm: (
+        souvenirId: string, 
+        souvenirName: string, 
+        backupSouvenirId?: string | null, 
+        backupSouvenirName?: string | null,
+        preferredSouvenirIds?: string[]
+    ) => void;
     onCancel: () => void;
     isSubmitting: boolean;
 }> = ({ isOpen, souvenirs, onConfirm, onCancel, isSubmitting }) => {
     const [selectedId, setSelectedId] = useState<string | null>(null);
-    const [backupId, setBackupId] = useState<string | null>(null);
+    const [backupChoices, setBackupChoices] = useState<string[]>([]);
 
     // Reset backup selection whenever the primary choice changes
     useEffect(() => {
-        setBackupId(null);
+        setBackupChoices([]);
     }, [selectedId]);
 
     if (!isOpen) return null;
 
     const selectedSouvenir = souvenirs.find(s => s.id === selectedId);
+    const availableSouvenirs = souvenirs.filter(s => s.quantity > 0);
+
+    const renderBackupSelectors = () => {
+        if (!selectedId) return null;
+        if (!selectedSouvenir || selectedSouvenir.quantity > 10) return null;
+
+        const selectors: React.ReactNode[] = [];
+        let currentChoices = [selectedId, ...backupChoices];
+
+        for (let i = 0; i < souvenirs.length; i++) {
+            const prevChoiceId = currentChoices[i];
+            if (!prevChoiceId) break;
+            
+            const prevSouvenir = souvenirs.find(s => s.id === prevChoiceId);
+            if (prevSouvenir && prevSouvenir.quantity <= 10) {
+                const priorityLevel = i + 2;
+                const currentBackupValue = backupChoices[i] || "";
+                
+                const selectedSet = new Set(currentChoices.slice(0, i + 1));
+                const availableOptions = souvenirs.filter(s => !selectedSet.has(s.id) && s.quantity > 0);
+                
+                if (availableOptions.length === 0) {
+                    break;
+                }
+                
+                selectors.push(
+                    <div key={priorityLevel} className="mt-3">
+                        <label className="block text-amber-400 font-bold mb-1 text-[11px]">
+                            第 {priorityLevel} 順位備選紀念品：
+                        </label>
+                        <select 
+                            value={currentBackupValue} 
+                            onChange={(e) => {
+                                const val = e.target.value;
+                                setBackupChoices(prev => {
+                                    const next = [...prev];
+                                    if (val) {
+                                        next[i] = val;
+                                        return next.slice(0, i + 1);
+                                    } else {
+                                        return next.slice(0, i);
+                                    }
+                                });
+                            }}
+                            className="w-full bg-slate-950 border border-amber-500/30 text-white rounded-xl p-2.5 text-xs focus:outline-none focus:border-amber-400 font-bold"
+                        >
+                            <option value="">-- 無（若前述順位皆缺貨，則彈出提示另由人工選取）--</option>
+                            {availableOptions.map(s => (
+                                <option key={s.id} value={s.id}>
+                                    {s.name} (剩餘 {s.quantity} 份)
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                );
+                
+                if (!currentBackupValue) {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+
+        if (selectors.length === 0) return null;
+
+        return (
+            <div className="bg-amber-950/70 border border-amber-500/40 p-4 rounded-2xl mb-5 text-xs text-amber-300 leading-relaxed shadow-lg">
+                <div className="flex items-center gap-2 font-bold text-amber-400 mb-2">
+                    <span>⚠️</span>
+                    <span>現場庫存緊張警示 (剩餘 &le; 10 份)</span>
+                </div>
+                <div>
+                    您選擇的「<strong className="text-white">{selectedSouvenir.name}</strong>」目前現場僅剩 <strong className="text-amber-400 font-mono text-sm">{selectedSouvenir.quantity}</strong> 份！
+                    在您點擊送出的瞬間，可能因多位同仁併發搶兌而在此刻份數耗盡。
+                    <br />
+                    <span className="font-bold text-white">請依序設定您的備選順位紀念品：</span>
+                </div>
+                <div className="space-y-2 mt-1">
+                    {selectors}
+                </div>
+            </div>
+        );
+    };
 
     return (
         <div className="fixed inset-0 z-[600] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md animate-fade-in">
@@ -163,82 +253,54 @@ const SouvenirSelectionModal: React.FC<{
                 <h3 className="text-2xl font-black text-center mb-1 text-[#73c8ce]">🎁 恭喜！選擇您的活動紀念品</h3>
                 <p className="text-slate-400 text-center text-xs mb-6">每位員工限領一份，送出後即時扣減存量</p>
                 
-                <div className="space-y-3 mb-6">
-                    {souvenirs.map((s) => {
-                        const isSelected = selectedId === s.id;
-                        const isOutOfStock = s.quantity <= 0;
-                        return (
-                            <div 
-                                key={s.id}
-                                onClick={() => !isOutOfStock && setSelectedId(s.id)}
-                                className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-between cursor-pointer ${
-                                    isOutOfStock 
-                                      ? 'bg-slate-900/30 border-slate-800 opacity-40 cursor-not-allowed' 
-                                      : isSelected 
-                                        ? 'bg-sky-500/10 border-[#73c8ce] shadow-[0_0_15px_rgba(115,200,206,0.3)]' 
-                                        : 'bg-slate-900/40 border-slate-700 hover:border-slate-500'
-                                }`}
-                            >
-                                <div className="flex items-center gap-3 max-w-[70%]">
-                                    {s.image ? (
-                                        <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 flex-shrink-0">
-                                            <img 
-                                                src={s.image} 
-                                                className="w-full h-full object-cover" 
-                                                onError={handleImageError}
-                                                loading="lazy"
-                                            />
+                {availableSouvenirs.length === 0 ? (
+                    <div className="text-center p-6 text-slate-400 font-bold border border-slate-800 rounded-2xl mb-6 bg-slate-900/30">
+                        🎁 很抱歉，今日現場所有紀念品皆已兌換完畢！
+                    </div>
+                ) : (
+                    <div className="space-y-3 mb-6">
+                        {availableSouvenirs.map((s) => {
+                            const isSelected = selectedId === s.id;
+                            return (
+                                <div 
+                                    key={s.id}
+                                    onClick={() => setSelectedId(s.id)}
+                                    className={`p-4 rounded-2xl border-2 transition-all flex items-center justify-between cursor-pointer ${
+                                        isSelected 
+                                          ? 'bg-sky-500/10 border-[#73c8ce] shadow-[0_0_15px_rgba(115,200,206,0.3)]' 
+                                          : 'bg-slate-900/40 border-slate-700 hover:border-slate-500'
+                                    }`}
+                                >
+                                    <div className="flex items-center gap-3 max-w-[70%]">
+                                        {s.image ? (
+                                            <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-700 bg-slate-900 flex-shrink-0">
+                                                <img 
+                                                    src={s.image} 
+                                                    className="w-full h-full object-cover" 
+                                                    onError={handleImageError}
+                                                    loading="lazy"
+                                                />
+                                            </div>
+                                        ) : (
+                                            <span className="text-2xl shrink-0">{isSelected ? '🎯' : '🎁'}</span>
+                                        )}
+                                        <div className="truncate">
+                                            <div className={`font-bold text-sm truncate ${isSelected ? 'text-[#73c8ce]' : 'text-white'}`}>{s.name}</div>
+                                            <div className="text-[10px] text-slate-400">目前現場限量供應</div>
                                         </div>
-                                    ) : (
-                                        <span className="text-2xl shrink-0">{isOutOfStock ? '❌' : isSelected ? '🎯' : '🎁'}</span>
-                                    )}
-                                    <div className="truncate">
-                                        <div className={`font-bold text-sm truncate ${isSelected ? 'text-[#73c8ce]' : 'text-white'}`}>{s.name}</div>
-                                        <div className="text-[10px] text-slate-400">目前現場限量供應</div>
                                     </div>
-                                </div>
-                                <div className="text-right">
-                                    {isOutOfStock ? (
-                                        <span className="text-xs bg-red-950 text-red-400 px-3 py-1 rounded-full border border-red-500/30 font-black">已領取完畢</span>
-                                    ) : (
+                                    <div className="text-right">
                                         <span className={`text-sm font-black font-mono ${isSelected ? 'text-[#73c8ce]' : 'text-sky-300'}`}>
                                             剩餘 {s.quantity} 份
                                         </span>
-                                    )}
+                                    </div>
                                 </div>
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Warning and backup option selection if quantity is extremely low (<= 10) */}
-                {selectedSouvenir && selectedSouvenir.quantity <= 10 && selectedSouvenir.quantity > 0 && (
-                    <div className="bg-amber-950/70 border border-amber-500/40 p-4 rounded-2xl mb-5 text-xs text-amber-300 leading-relaxed shadow-lg">
-                        <div className="flex items-center gap-2 font-bold text-amber-400 mb-1">
-                            <span>⚠️</span>
-                            <span>現場庫存緊張警示 (剩餘 &le; 10 份)</span>
-                        </div>
-                        您選擇的「<strong className="text-white">{selectedSouvenir.name}</strong>」目前現場僅剩 <strong className="text-amber-400 font-mono text-sm">{selectedSouvenir.quantity}</strong> 份！
-                        在您點擊送出的瞬間，可能因多位同仁併發搶兌而在此刻份數耗盡。
-                        <br />
-                        <span className="font-bold text-white">建議您預設「第二順位備選紀念品」：</span>
-                        
-                        <div className="mt-3">
-                            <select 
-                               value={backupId || ""} 
-                               onChange={(e) => setBackupId(e.target.value || null)}
-                               className="w-full bg-slate-950 border border-amber-500/30 text-white rounded-xl p-2.5 text-xs focus:outline-none focus:border-amber-400 font-bold"
-                            >
-                               <option value="">-- 無（若首選缺貨，則彈出提示另由人工選取）--</option>
-                               {souvenirs.filter(s => s.id !== selectedId && s.quantity > 0).map(s => (
-                                 <option key={s.id} value={s.id}>
-                                   {s.name} (剩餘 {s.quantity} 份)
-                                 </option>
-                               ))}
-                            </select>
-                        </div>
+                            );
+                        })}
                     </div>
                 )}
+
+                {renderBackupSelectors()}
 
                 <div className="flex gap-3">
                     <button onClick={onCancel} className="flex-1 py-3.5 bg-slate-800 hover:bg-slate-700 rounded-xl font-bold transition-colors">修改前台選票</button>
@@ -246,8 +308,10 @@ const SouvenirSelectionModal: React.FC<{
                         disabled={!selectedId || isSubmitting}
                         onClick={() => {
                             if (selectedSouvenir) {
+                                const preferredIds = [selectedId, ...backupChoices].filter((id): id is string => !!id);
+                                const backupId = backupChoices[0] || null;
                                 const backupSouvenir = souvenirs.find(s => s.id === backupId);
-                                onConfirm(selectedId, selectedSouvenir.name, backupId, backupSouvenir?.name);
+                                onConfirm(selectedId, selectedSouvenir.name, backupId, backupSouvenir?.name, preferredIds);
                             }
                         }}
                         className={`flex-1 py-3.5 rounded-xl font-black transition-all text-center ${
@@ -413,9 +477,9 @@ const VotePage: React.FC = () => {
     };
   }, []);
 
-  const handleSelect = (category: VoteCategory, candidateId: string) => {
+  const handleSelect = (category: VoteCategory, candidateId: string | null) => {
       if (!isVotingOpen) return;
-      setSelections(prev => ({ ...prev, [category]: candidateId }));
+      setSelections(prev => ({ ...prev, [category]: candidateId || null }));
   };
 
   const isAllSelected = selections.SINGING && selections.POPULARITY && selections.COSTUME;
@@ -453,7 +517,8 @@ const VotePage: React.FC = () => {
     souvenirId: string, 
     souvenirName: string,
     backupId?: string | null,
-    backupName?: string | null
+    backupName?: string | null,
+    preferredSouvenirIds?: string[]
   ) => {
       setIsSubmitting(true);
       const result = await voteService.submitVoteBatch(
@@ -464,7 +529,8 @@ const VotePage: React.FC = () => {
          souvenirName,
          clientIp,
          backupId,
-         backupName
+         backupName,
+         preferredSouvenirIds
       );
       setIsSubmitting(false);
 
@@ -505,7 +571,7 @@ const VotePage: React.FC = () => {
   }
 
   const SECTIONS = [
-      { cat: VoteCategory.SINGING, title: "印象最深刻產品", sub: "Most Memorable Product", color: "border-sky-500/30", icon: "💎" },
+      { cat: VoteCategory.SINGING, title: "最佳造型設計產品", sub: "Best Styling & Design", color: "border-sky-500/30", icon: "🎨" },
       { cat: VoteCategory.POPULARITY, title: "最佳人氣產品", sub: "Most Popular Product", color: "border-[#73c8ce]/30", icon: "👑" },
       { cat: VoteCategory.COSTUME, title: "最有前瞻性產品", sub: "Most Forward-Looking Product", color: "border-indigo-500/30", icon: "🚀" }
   ];
@@ -573,39 +639,46 @@ const VotePage: React.FC = () => {
                     )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
-                    {candidates.map((c, idx) => {
-                        const isSelected = selections[section.cat] === c.id;
-                        return (
-                            <div 
-                                key={c.id} 
-                                onClick={() => setDetailModal({ candidate: c, category: section.cat, categoryTitle: section.title })}
-                                className="flex flex-col items-center cursor-pointer group"
-                            >
-                                <div className={`relative w-20 h-20 md:w-24 md:h-24 rounded-2xl transition-all duration-300 ${isSelected ? 'scale-105' : 'hover:scale-105'}`}>
-                                    <div className={`w-full h-full rounded-2xl overflow-hidden border-2 ${isSelected ? 'border-sky-400 ring-4 ring-sky-400/30 shadow-[0_0_15px_rgba(115,200,206,0.5)]' : 'border-slate-800 bg-slate-900 group-hover:border-[#73c8ce]'} shadow-inner`}>
-                                        <img 
-                                            src={c.image || "https://images.unsplash.com/photo-1540350394557-8d14678e7f91?auto=format&fit=crop&w=400&q=80"} 
-                                            className="w-full h-full object-cover" 
-                                            onError={handleImageError}
-                                            loading="lazy"
-                                            decoding="async"
-                                        />
-                                    </div>
-                                    {isVotingOpen && isSelected && (
-                                        <div className="absolute -top-1.5 -right-1.5 w-6 h-6 bg-sky-400 rounded-full flex items-center justify-center text-slate-950 text-xs font-black shadow-lg">✓</div>
-                                    )}
-                                </div>
-                                <span className={`text-xs mt-2.5 truncate w-full text-center px-1 font-bold ${isSelected ? 'text-[#73c8ce]' : 'text-slate-300 group-hover:text-white'}`}>
-                                    {c.name}
-                                </span>
-                                <span className="text-[10px] text-slate-500 font-medium">
-                                    {c.song}
-                                </span>
-                            </div>
-                        );
-                    })}
+                <div className="relative mt-2">
+                    <select
+                        id={`select-${section.cat}`}
+                        value={selections[section.cat] || ""}
+                        disabled={!isVotingOpen}
+                        onChange={(e) => handleSelect(section.cat, e.target.value || null)}
+                        className="w-full bg-[#05081c]/95 border border-slate-700/80 text-[#73c8ce] rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all appearance-none cursor-pointer shadow-lg tracking-wide pr-10"
+                    >
+                        <option value="" className="bg-[#05081c] text-slate-500">
+                           -- 請下拉選擇評選產品 / 機器 --
+                        </option>
+                        {candidates.map((c) => (
+                            <option key={c.id} value={c.id} className="bg-[#0c1232] text-white">
+                                {c.name} {c.song ? ` [${c.song}]` : ''}
+                            </option>
+                        ))}
+                    </select>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#73c8ce] text-xs">
+                        ▼
+                    </div>
                 </div>
+
+                {selections[section.cat] && (
+                    <div className="mt-4 bg-[#73c8ce]/5 border border-[#73c8ce]/20 rounded-2xl p-4 flex items-center justify-between">
+                        <div>
+                            <div className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">已選擇產品</div>
+                            <div className="text-sm font-black text-white mt-1">
+                                {getProductName(selections[section.cat])}
+                            </div>
+                            {candidates.find(c => c.id === selections[section.cat])?.song && (
+                                <div className="text-[11px] text-[#73c8ce] mt-0.5 font-medium">
+                                    分類: {candidates.find(c => c.id === selections[section.cat])?.song}
+                                </div>
+                            )}
+                        </div>
+                        <div className="text-sky-400 text-lg bg-sky-950/60 w-8 h-8 rounded-full border border-sky-500/30 flex items-center justify-center font-black shadow-inner">
+                           ✓
+                        </div>
+                    </div>
+                )}
             </div>
           ))}
       </div>
@@ -619,7 +692,7 @@ const VotePage: React.FC = () => {
                         key={s.cat}
                         onClick={() => scrollToCategory(s.cat)}
                         className={`p-2 rounded-xl text-center border cursor-pointer transition-all ${selections[s.cat] ? 'border-sky-400/50 bg-sky-500/10' : 'border-slate-800 bg-slate-900/50 opacity-60'}`}>
-                          <div className="text-[9px] text-[#73c8ce] font-black mb-0.5 uppercase tracking-tighter">{s.icon} {s.cat === VoteCategory.SINGING ? '最深刻' : s.cat === VoteCategory.POPULARITY ? '最人氣' : '前瞻性'}</div>
+                          <div className="text-[9px] text-[#73c8ce] font-black mb-0.5 uppercase tracking-tighter">{s.icon} {s.cat === VoteCategory.SINGING ? '最造型' : s.cat === VoteCategory.POPULARITY ? '最人氣' : '前瞻性'}</div>
                           <div className="text-[11px] font-black text-white truncate">{getProductName(selections[s.cat])}</div>
                       </div>
                   ))}
@@ -635,8 +708,8 @@ const VotePage: React.FC = () => {
                   {isAllSelected ? '確認送出三項評選大賞' : '請完成所有組別選擇'}
               </button>
           ) : (
-              <div className="w-full max-w-xl mx-auto bg-slate-800 text-slate-400 py-4 rounded-2xl font-black text-center text-xl border border-slate-700 opacity-80">
-                  請點擊卡片瀏覽產品照片
+              <div className="w-full max-w-xl mx-auto bg-slate-800 text-slate-400 py-4 rounded-2xl font-black text-center text-sm border border-slate-700 opacity-80">
+                  評選已關閉，本頁面僅供大賞項目預覽
               </div>
           )}
       </div>
@@ -656,6 +729,16 @@ const ResultsPage: React.FC = () => {
   const [activeTab, setActiveTab ] = useState<'votes' | 'roster'>('votes');
   const [errorMsg, setErrorMsg] = useState('');
   const [authorizedStaffCount, setAuthorizedStaffCount] = useState(0);
+  const [detailPopup, setDetailPopup] = useState<{
+    title: string;
+    icon: string;
+    totalVotes: number;
+    list: Candidate[];
+    scoreKey: 'scoreSinging' | 'scorePopularity' | 'scoreCostume';
+    colorClass: string;
+    barColorFrom: string;
+    barColorTo: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
@@ -694,7 +777,8 @@ const ResultsPage: React.FC = () => {
 
   const filteredRoster = staffRoster.filter(s =>
     s.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.name.toLowerCase().includes(searchTerm.toLowerCase())
+    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.tag && s.tag.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   // Sorting helper for ranking categories
@@ -777,102 +861,168 @@ const ResultsPage: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Category A */}
-            <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-800/80">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">💎</span>
-                <div>
-                  <h3 className="text-sm font-black text-white">印象最深刻產品</h3>
-                  <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Total votes: {totalSingingVotes}</p>
+            <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">🎨</span>
+                  <div>
+                    <h3 className="text-sm font-black text-white">最佳造型設計產品</h3>
+                    <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Total votes: {totalSingingVotes}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {sortedSinging.slice(0, 10).map((c, i) => {
+                    const percent = totalSingingVotes > 0 ? ((c.scoreSinging || 0) / totalSingingVotes) * 105 : 0;
+                    const displayPercent = totalSingingVotes > 0 ? ((c.scoreSinging || 0) / totalSingingVotes) * 100 : 0;
+                    return (
+                      <div key={c.id} className="text-xs">
+                        <div className="flex justify-between items-center mb-1 text-slate-300">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                              {i + 1}
+                            </span>
+                            <span className="font-bold truncate">{c.name}</span>
+                          </div>
+                          <span className="font-mono font-bold text-sky-400 text-[11px] shrink-0">{c.scoreSinging || 0} 票 ({displayPercent.toFixed(0)}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
+                          <div className="bg-gradient-to-r from-sky-500 to-teal-400 h-full rounded-full transition-all duration-500" style={{ width: `${percent || 1}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {sortedSinging.length === 0 && (
+                    <div className="text-center py-6 text-xs text-slate-500 italic">暫無投票</div>
+                  )}
                 </div>
               </div>
-              <div className="space-y-3">
-                {sortedSinging.map((c, i) => {
-                  const percent = totalSingingVotes > 0 ? ((c.scoreSinging || 0) / totalSingingVotes) * 105 : 0;
-                  const displayPercent = totalSingingVotes > 0 ? ((c.scoreSinging || 0) / totalSingingVotes) * 100 : 0;
-                  return (
-                    <div key={c.id} className="text-xs">
-                      <div className="flex justify-between items-center mb-1 text-slate-300">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                            {i + 1}
-                          </span>
-                          <span className="font-bold truncate">{c.name}</span>
-                        </div>
-                        <span className="font-mono font-bold text-sky-400 text-[11px] shrink-0">{c.scoreSinging || 0} 票 ({displayPercent.toFixed(0)}%)</span>
-                      </div>
-                      <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-gradient-to-r from-sky-500 to-teal-400 h-full rounded-full transition-all duration-500" style={{ width: `${percent || 1}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {sortedSinging.length > 10 && (
+                <button
+                  onClick={() => setDetailPopup({
+                    title: "最佳造型設計產品",
+                    icon: "🎨",
+                    totalVotes: totalSingingVotes,
+                    list: sortedSinging,
+                    scoreKey: 'scoreSinging',
+                    colorClass: "text-sky-400",
+                    barColorFrom: "from-sky-500",
+                    barColorTo: "to-teal-400"
+                  })}
+                  className="w-full mt-4 bg-sky-950/40 hover:bg-sky-900/60 border border-sky-500/30 text-sky-300 font-bold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                >
+                  🔍 展開全部得票 ({sortedSinging.length} 款)
+                </button>
+              )}
             </div>
 
             {/* Category B */}
-            <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-800/80">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">👑</span>
-                <div>
-                  <h3 className="text-sm font-black text-white">最佳人氣產品</h3>
-                  <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Total votes: {totalPopularityVotes}</p>
+            <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">👑</span>
+                  <div>
+                    <h3 className="text-sm font-black text-white">最佳人氣產品</h3>
+                    <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Total votes: {totalPopularityVotes}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {sortedPopularity.slice(0, 10).map((c, i) => {
+                    const percent = totalPopularityVotes > 0 ? ((c.scorePopularity || 0) / totalPopularityVotes) * 105 : 0;
+                    const displayPercent = totalPopularityVotes > 0 ? ((c.scorePopularity || 0) / totalPopularityVotes) * 100 : 0;
+                    return (
+                      <div key={c.id} className="text-xs">
+                        <div className="flex justify-between items-center mb-1 text-slate-300">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                              {i + 1}
+                            </span>
+                            <span className="font-bold truncate">{c.name}</span>
+                          </div>
+                          <span className="font-mono font-bold text-[#73c8ce] text-[11px] shrink-0">{c.scorePopularity || 0} 票 ({displayPercent.toFixed(0)}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
+                          <div className="bg-gradient-to-r from-[#73c8ce] to-sky-400 h-full rounded-full transition-all duration-500" style={{ width: `${percent || 1}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {sortedPopularity.length === 0 && (
+                    <div className="text-center py-6 text-xs text-slate-500 italic">暫無投票</div>
+                  )}
                 </div>
               </div>
-              <div className="space-y-3">
-                {sortedPopularity.map((c, i) => {
-                  const percent = totalPopularityVotes > 0 ? ((c.scorePopularity || 0) / totalPopularityVotes) * 105 : 0;
-                  const displayPercent = totalPopularityVotes > 0 ? ((c.scorePopularity || 0) / totalPopularityVotes) * 100 : 0;
-                  return (
-                    <div key={c.id} className="text-xs">
-                      <div className="flex justify-between items-center mb-1 text-slate-300">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                            {i + 1}
-                          </span>
-                          <span className="font-bold truncate">{c.name}</span>
-                        </div>
-                        <span className="font-mono font-bold text-[#73c8ce] text-[11px] shrink-0">{c.scorePopularity || 0} 票 ({displayPercent.toFixed(0)}%)</span>
-                      </div>
-                      <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-gradient-to-r from-[#73c8ce] to-sky-400 h-full rounded-full transition-all duration-500" style={{ width: `${percent || 1}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {sortedPopularity.length > 10 && (
+                <button
+                  onClick={() => setDetailPopup({
+                    title: "最佳人氣產品",
+                    icon: "👑",
+                    totalVotes: totalPopularityVotes,
+                    list: sortedPopularity,
+                    scoreKey: 'scorePopularity',
+                    colorClass: "text-[#73c8ce]",
+                    barColorFrom: "from-[#73c8ce]",
+                    barColorTo: "to-sky-400"
+                  })}
+                  className="w-full mt-4 bg-[#73c8ce]/10 hover:bg-[#73c8ce]/20 border border-[#73c8ce]/30 text-[#73c8ce] font-bold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                >
+                  🔍 展開全部得票 ({sortedPopularity.length} 款)
+                </button>
+              )}
             </div>
 
             {/* Category C */}
-            <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-800/80">
-              <div className="flex items-center gap-2 mb-4">
-                <span className="text-xl">🚀</span>
-                <div>
-                  <h3 className="text-sm font-black text-white">最有前瞻性產品</h3>
-                  <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Total votes: {totalCostumeVotes}</p>
+            <div className="bg-slate-950/50 p-5 rounded-2xl border border-slate-800/80 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">🚀</span>
+                  <div>
+                    <h3 className="text-sm font-black text-white">最有前瞻性產品</h3>
+                    <p className="text-[9px] text-slate-500 font-mono uppercase tracking-wider">Total votes: {totalCostumeVotes}</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {sortedCostume.slice(0, 10).map((c, i) => {
+                    const percent = totalCostumeVotes > 0 ? ((c.scoreCostume || 0) / totalCostumeVotes) * 105 : 0;
+                    const displayPercent = totalCostumeVotes > 0 ? ((c.scoreCostume || 0) / totalCostumeVotes) * 100 : 0;
+                    return (
+                      <div key={c.id} className="text-xs">
+                        <div className="flex justify-between items-center mb-1 text-slate-300">
+                          <div className="flex items-center gap-2 truncate">
+                            <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
+                              {i + 1}
+                            </span>
+                            <span className="font-bold truncate">{c.name}</span>
+                          </div>
+                          <span className="font-mono font-bold text-indigo-400 text-[11px] shrink-0">{c.scoreCostume || 0} 票 ({displayPercent.toFixed(0)}%)</span>
+                        </div>
+                        <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
+                          <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500" style={{ width: `${percent || 1}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {sortedCostume.length === 0 && (
+                    <div className="text-center py-6 text-xs text-slate-500 italic">暫無投票</div>
+                  )}
                 </div>
               </div>
-              <div className="space-y-3">
-                {sortedCostume.map((c, i) => {
-                  const percent = totalCostumeVotes > 0 ? ((c.scoreCostume || 0) / totalCostumeVotes) * 105 : 0;
-                  const displayPercent = totalCostumeVotes > 0 ? ((c.scoreCostume || 0) / totalCostumeVotes) * 100 : 0;
-                  return (
-                    <div key={c.id} className="text-xs">
-                      <div className="flex justify-between items-center mb-1 text-slate-300">
-                        <div className="flex items-center gap-2 truncate">
-                          <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-800 text-slate-400'}`}>
-                            {i + 1}
-                          </span>
-                          <span className="font-bold truncate">{c.name}</span>
-                        </div>
-                        <span className="font-mono font-bold text-indigo-400 text-[11px] shrink-0">{c.scoreCostume || 0} 票 ({displayPercent.toFixed(0)}%)</span>
-                      </div>
-                      <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
-                        <div className="bg-gradient-to-r from-indigo-500 to-purple-500 h-full rounded-full transition-all duration-500" style={{ width: `${percent || 1}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+              {sortedCostume.length > 10 && (
+                <button
+                  onClick={() => setDetailPopup({
+                    title: "最有前瞻性產品",
+                    icon: "🚀",
+                    totalVotes: totalCostumeVotes,
+                    list: sortedCostume,
+                    scoreKey: 'scoreCostume',
+                    colorClass: "text-indigo-400",
+                    barColorFrom: "from-indigo-500",
+                    barColorTo: "to-purple-500"
+                  })}
+                  className="w-full mt-4 bg-indigo-950/40 hover:bg-indigo-900/60 border border-indigo-500/30 text-indigo-300 font-bold py-2 rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                >
+                  🔍 展開全部得票 ({sortedCostume.length} 款)
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -941,7 +1091,8 @@ const ResultsPage: React.FC = () => {
                   <tr>
                      <th className="px-4 py-3.5">工號</th>
                      <th className="px-4 py-3.5">姓名</th>
-                     <th className="px-4 py-3.5">1. 印象最深刻產品</th>
+                     <th className="px-4 py-3.5">標籤 / 類別</th>
+                     <th className="px-4 py-3.5">1. 最佳造型設計產品</th>
                      <th className="px-4 py-3.5">2. 最佳人氣產品</th>
                      <th className="px-4 py-3.5">3. 最有前瞻性產品</th>
                      <th className="px-4 py-3.5">選定紀念品</th>
@@ -949,24 +1100,36 @@ const ResultsPage: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 bg-slate-950/40">
-                  {filteredDetails.map((detail) => (
-                    <tr key={detail.id} className="hover:bg-[#121c4b]/30">
-                       <td className="px-4 py-3.5 font-bold text-sky-300 font-mono">{detail.staffId}</td>
-                       <td className="px-4 py-3.5 font-bold text-white">{detail.name}</td>
-                       <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.singing)}</td>
-                       <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.popularity)}</td>
-                       <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.costume)}</td>
-                       <td className="px-4 py-3.5">
-                          <span className="bg-sky-950/70 border border-sky-500/30 text-sky-300 px-2 py-1 rounded-md text-xs font-bold">
-                             {detail.souvenirName}
-                          </span>
-                       </td>
-                       <td className="px-4 py-3.5 text-xs text-slate-500 font-mono">{detail.ip}</td>
-                    </tr>
-                  ))}
+                  {filteredDetails.map((detail) => {
+                    const memberInfo = staffRoster.find(s => s.id.trim().toUpperCase() === detail.staffId.trim().toUpperCase());
+                    return (
+                      <tr key={detail.id} className="hover:bg-[#121c4b]/30">
+                         <td className="px-4 py-3.5 font-bold text-sky-300 font-mono">{detail.staffId}</td>
+                         <td className="px-4 py-3.5 font-bold text-white">{detail.name}</td>
+                         <td className="px-4 py-3.5">
+                            {memberInfo?.tag ? (
+                              <span className="bg-indigo-950/70 border border-indigo-500/40 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
+                                 🏷️ {memberInfo.tag}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono text-xs">-</span>
+                            )}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.singing)}</td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.popularity)}</td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.costume)}</td>
+                         <td className="px-4 py-3.5">
+                            <span className="bg-sky-950/70 border border-sky-500/30 text-sky-300 px-2 py-1 rounded-md text-xs font-bold">
+                               {detail.souvenirName}
+                            </span>
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-500 font-mono">{detail.ip}</td>
+                      </tr>
+                    );
+                  })}
                   {filteredDetails.length === 0 && (
                     <tr>
-                       <td colSpan={7} className="text-center py-10 text-slate-500 italic">
+                       <td colSpan={8} className="text-center py-10 text-slate-500 italic">
                           暫無符合篩選條件的同仁投票數據。可能還沒有同仁完成投票投遞，請至前台提交測試！
                        </td>
                     </tr>
@@ -979,9 +1142,10 @@ const ResultsPage: React.FC = () => {
                   <tr>
                      <th className="px-4 py-3.5">專屬工號</th>
                      <th className="px-4 py-3.5">姓名</th>
+                     <th className="px-4 py-3.5">標籤 / 類別</th>
                      <th className="px-4 py-3.5">認證權限狀態</th>
                      <th className="px-4 py-3.5">投票/領取狀態</th>
-                     <th className="px-4 py-3.5">1. 印象最深刻產品</th>
+                     <th className="px-4 py-3.5">1. 最佳造型設計產品</th>
                      <th className="px-4 py-3.5">2. 最佳人氣產品</th>
                      <th className="px-4 py-3.5">3. 最有前瞻性產品</th>
                      <th className="px-4 py-3.5">選定紀念品</th>
@@ -995,6 +1159,15 @@ const ResultsPage: React.FC = () => {
                       <tr key={member.id} className="hover:bg-[#121c4b]/30">
                          <td className="px-4 py-3.5 font-bold text-[#73c8ce] font-mono">{member.id}</td>
                          <td className="px-4 py-3.5 font-bold text-white">{member.name || '（未註明姓名，僅憑此工號登入）'}</td>
+                         <td className="px-4 py-3.5">
+                            {member.tag ? (
+                              <span className="bg-indigo-950/70 border border-indigo-500/40 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
+                                 🏷️ {member.tag}
+                              </span>
+                            ) : (
+                              <span className="text-slate-600 font-mono text-xs">-</span>
+                            )}
+                         </td>
                          <td className="px-4 py-3.5">
                             <span className="bg-emerald-950/70 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap">
                                ✔️ 允許驗證投票
@@ -1037,7 +1210,7 @@ const ResultsPage: React.FC = () => {
                   })}
                   {filteredRoster.length === 0 && (
                     <tr>
-                       <td colSpan={9} className="text-center py-10 text-slate-400 italic">
+                       <td colSpan={10} className="text-center py-10 text-slate-400 italic">
                           暫無符合篩選條件的工號，請至後台管理匯入員工清單。
                        </td>
                     </tr>
@@ -1048,6 +1221,65 @@ const ResultsPage: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Detail Standings Popup Modal */}
+      {detailPopup && (
+        <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md z-[150] flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-[#0b1029]/95 border border-slate-800 p-6 rounded-3xl w-full max-w-xl max-h-[80vh] overflow-hidden flex flex-col shadow-2xl relative">
+            <button 
+              onClick={() => setDetailPopup(null)}
+              className="absolute top-5 right-5 text-slate-400 hover:text-white font-mono font-bold text-xl bg-slate-900 w-8 h-8 rounded-full border border-slate-800 flex items-center justify-center transition-all hover:scale-105 active:scale-95 animate-fade-in"
+            >
+              ✕
+            </button>
+            
+            <div className="flex items-center gap-3 mb-4 border-b border-slate-800 pb-3">
+              <span className="text-3xl">{detailPopup.icon}</span>
+              <div>
+                <h3 className="text-lg font-black text-white">{detailPopup.title} - 全體排行</h3>
+                <p className="text-xs text-slate-400 mt-0.5">總投票數: <span className="font-bold text-white">{detailPopup.totalVotes}</span> 票</p>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto pr-1 space-y-3 my-2 scrollbar-thin scrollbar-thumb-slate-800">
+              {detailPopup.list.map((c, i) => {
+                const score = c[detailPopup.scoreKey] || 0;
+                const percent = detailPopup.totalVotes > 0 ? (score / detailPopup.totalVotes) * 105 : 0;
+                const displayPercent = detailPopup.totalVotes > 0 ? (score / detailPopup.totalVotes) * 100 : 0;
+                
+                return (
+                  <div key={c.id} className="text-xs bg-slate-950/40 border border-slate-800/60 p-3 rounded-xl">
+                    <div className="flex justify-between items-center mb-1.5 text-slate-300">
+                      <div className="flex items-center gap-2 truncate">
+                        <span className={`font-mono font-black text-[10px] w-5 h-5 rounded-md flex items-center justify-center ${i === 0 ? 'bg-yellow-500 text-slate-950' : i === 1 ? 'bg-slate-300 text-slate-950' : i === 2 ? 'bg-amber-700 text-white' : 'bg-slate-900 text-slate-400'}`}>
+                          {i + 1}
+                        </span>
+                        <span className="font-bold text-white truncate text-sm">{c.name}</span>
+                        {c.song && (
+                          <span className="text-[10px] text-slate-500 truncate">({c.song})</span>
+                        )}
+                      </div>
+                      <span className={`font-mono font-bold ${detailPopup.colorClass} text-xs shrink-0`}>{score} 票 ({displayPercent.toFixed(0)}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-900/80 h-2 rounded-full overflow-hidden border border-slate-800">
+                      <div className={`bg-gradient-to-r ${detailPopup.barColorFrom} ${detailPopup.barColorTo} h-full rounded-full transition-all duration-300`} style={{ width: `${percent || 1}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 border-t border-slate-800 pt-3 flex justify-end">
+              <button 
+                onClick={() => setDetailPopup(null)}
+                className="bg-slate-800 hover:bg-slate-700 text-white font-bold px-5 py-2 rounded-xl text-xs transition-all active:scale-95"
+              >
+                關閉視窗
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1194,7 +1426,7 @@ const AdminPage: React.FC = () => {
             {/* Quick Summary Dashboard */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
                 <div className="bg-slate-800/60 border border-slate-700 p-4 rounded-2xl text-center shadow-lg">
-                    <div className="text-[10px] font-black text-slate-500 uppercase">印象最深刻產品 總計得票</div>
+                    <div className="text-[10px] font-black text-slate-500 uppercase">最佳造型設計產品 總計得票</div>
                     <div className="text-3xl font-black text-yellow-500 font-mono">{candidates.reduce((sum, c) => sum + (c.scoreSinging || 0), 0)}</div>
                 </div>
                 <div className="bg-slate-800/60 border border-slate-700 p-4 rounded-2xl text-center shadow-lg">
@@ -1312,15 +1544,18 @@ const AdminPage: React.FC = () => {
 
                     {/* Staff List management */}
                     <div className="bg-[#0b1029]/75 border border-slate-800 p-6 rounded-3xl shadow-xl">
-                        <h3 className="text-base font-bold mb-1">🆔 專屬工號與員工姓名匯入</h3>
+                        <h3 className="text-base font-bold mb-1">🆔 專屬工號與員工姓名/標籤匯入</h3>
                         <p className="text-[10px] text-slate-400 mb-3 leading-relaxed">
-                            可以只貼「工號」本身，亦支援貼入「工號,真實姓名」對應名單（可用英文逗號或中文逗號分隔，每行一組）。
+                            支援三種格式（可用英文逗號或中文逗號分隔，每行一組）：
+                            <br />1. <strong className="text-white">工號</strong> (如: <code>QA00001</code>)
+                            <br />2. <strong className="text-white">工號,姓名</strong> (如: <code>QA00001,王小明</code>)
+                            <br />3. <strong className="text-white">工號,姓名,標籤</strong> (如: <code>QA00001,王小明,海外</code> 或 <code>QA00002,陳大同,出差</code>)
                         </p>
                         <div className="space-y-3">
                             <textarea 
                                 value={staffIdCsv}
                                 onChange={e => setStaffIdCsv(e.target.value)}
-                                placeholder="QA00001,王小明&#10;QA00002,陳大同&#10;10605031,無名琛"
+                                placeholder="QA00001,王小明,海外&#10;QA00002,陳大同,出差&#10;10605031,無名琛,本土"
                                 className="w-full h-32 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono focus:border-[#73c8ce] outline-none"
                             ></textarea>
                             <button onClick={handleStaffIdUpload} disabled={isSyncing} className="w-full bg-[#73c8ce] text-slate-950 font-black py-3 rounded-xl text-sm hover:opacity-95 transition-all">

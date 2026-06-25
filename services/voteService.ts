@@ -183,7 +183,8 @@ class VoteService {
       this.staffRoster = Object.keys(data).map(id => ({
         id: id,
         name: data[id].name || '',
-        used: !!data[id].used
+        used: !!data[id].used,
+        tag: data[id].tag || ''
       })).sort((a, b) => a.id.localeCompare(b.id));
       this.notifyListeners();
     });
@@ -226,18 +227,30 @@ class VoteService {
         const trimmed = line.trim();
         if (!trimmed) return;
         
-        let id = trimmed;
+        let id = "";
         let name = "";
+        let tag = "";
         
-        const commaIndex = trimmed.indexOf(',') !== -1 ? trimmed.indexOf(',') : trimmed.indexOf('，');
-        if (commaIndex !== -1) {
-          id = trimmed.substring(0, commaIndex).trim();
-          name = trimmed.substring(commaIndex + 1).trim();
+        // Split by either English comma or Chinese comma
+        const normalizedLine = trimmed.replace(/，/g, ',');
+        const parts = normalizedLine.split(',');
+        
+        if (parts.length >= 1) {
+          id = parts[0].trim().toUpperCase();
+        }
+        if (parts.length >= 2) {
+          name = parts[1].trim();
+        }
+        if (parts.length >= 3) {
+          tag = parts[2].trim();
         }
         
-        id = id.toUpperCase();
         if (id.length > 0) {
-          updates[`staff_list/${id}`] = { used: false, name: name };
+          updates[`staff_list/${id}`] = { 
+            used: false, 
+            name: name,
+            tag: tag
+          };
           count++;
         }
       });
@@ -253,7 +266,7 @@ class VoteService {
     }
   }
 
-  async lookupStaff(staffId: string): Promise<{ success: boolean; name?: string; used?: boolean }> {
+  async lookupStaff(staffId: string): Promise<{ success: boolean; name?: string; used?: boolean; tag?: string }> {
     try {
       const id = staffId.trim().toUpperCase();
       if (!id) return { success: false };
@@ -261,7 +274,7 @@ class VoteService {
       const snap = await get(staffRef);
       if (snap.exists()) {
         const val = snap.val();
-        return { success: true, name: val.name || "", used: !!val.used };
+        return { success: true, name: val.name || "", used: !!val.used, tag: val.tag || "" };
       }
       return { success: false };
     } catch {
@@ -325,7 +338,8 @@ class VoteService {
     souvenirName: string,
     clientIp: string = "Unknown",
     backupSouvenirId?: string | null,
-    backupSouvenirName?: string | null
+    backupSouvenirName?: string | null,
+    preferredSouvenirIds?: string[]
   ): Promise<{ success: boolean; message?: string; chosenSouvenirName?: string }> {
     if (!this.isVotingOpen) return { success: false, message: "投票通道已關閉。" };
     
@@ -351,32 +365,50 @@ class VoteService {
     }
 
     try {
-      let finalSouvenirId = souvenirId;
-      let finalSouvenirName = souvenirName;
+      let finalSouvenirId = "";
+      let finalSouvenirName = "";
       let isBackupUsed = false;
+      let deducted = false;
 
-      // Deduct souvenir atomically using a transaction
-      const deductResult = await this.tryDeductSouvenir(souvenirId);
-      if (!deductResult.success) {
-        // First choice out of stock. Check if backup choice is available.
-        if (backupSouvenirId && backupSouvenirName && backupSouvenirId !== souvenirId) {
+      // If preferredSouvenirIds list is passed, we try each one in sequence.
+      if (preferredSouvenirIds && preferredSouvenirIds.length > 0) {
+        for (let i = 0; i < preferredSouvenirIds.length; i++) {
+          const sId = preferredSouvenirIds[i];
+          const souvenirObj = this.souvenirs.find(s => s.id === sId);
+          if (souvenirObj) {
+            const deductResult = await this.tryDeductSouvenir(sId);
+            if (deductResult.success) {
+              finalSouvenirId = sId;
+              finalSouvenirName = souvenirObj.name;
+              deducted = true;
+              isBackupUsed = i > 0;
+              break;
+            }
+          }
+        }
+      } else {
+        // Fallback to old behavior
+        const deductResult = await this.tryDeductSouvenir(souvenirId);
+        if (deductResult.success) {
+          finalSouvenirId = souvenirId;
+          finalSouvenirName = souvenirName;
+          deducted = true;
+        } else if (backupSouvenirId && backupSouvenirName && backupSouvenirId !== souvenirId) {
           const backupDeduct = await this.tryDeductSouvenir(backupSouvenirId);
           if (backupDeduct.success) {
             finalSouvenirId = backupSouvenirId;
             finalSouvenirName = backupSouvenirName;
+            deducted = true;
             isBackupUsed = true;
-          } else {
-            return { 
-              success: false, 
-              message: `很抱歉，首選紀念品「${souvenirName}」與備選紀念品「${backupSouvenirName}」皆已兌換完畢，請重新進行投票選購。` 
-            };
           }
-        } else {
-          return { 
-            success: false, 
-            message: `很抱歉，您選取的紀念品「${souvenirName}」已被他人搶先兌換完畢！請重新選購。` 
-          };
         }
+      }
+
+      if (!deducted) {
+        return { 
+          success: false, 
+          message: `很抱歉，您所預設的所有順位紀念品皆已兌換完畢（可能在此刻被其他同仁搶先換完），請重新進行投票選購。` 
+        };
       }
 
       const updates: any = {};
