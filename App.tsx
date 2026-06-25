@@ -130,7 +130,7 @@ const StaffIdModal: React.FC<{
                     >
                         下一步：選擇紀念品
                     </button>
-                    <button onClick={onCancel} className="w-full py-2 text-slate-500 font-bold hover:text-slate-300 text-sm transition-colors">取消</button>
+                    <button onClick={onCancel} className="w-full py-2 text-slate-500 font-bold hover:text-slate-300 text-sm transition-colors">這不是我</button>
                 </div>
             </div>
         </div>
@@ -426,7 +426,7 @@ const Header: React.FC<{ subtitle?: string; size?: 'small' | 'large' }> = ({ sub
                     2026 TeamTalk
                   </div>
                   <div className={`text-[#73c8ce] tracking-[0.4em] font-black ${size === 'large' ? 'text-xs md:text-sm mt-3' : 'text-[9px] md:text-[11px] mt-1'} uppercase`}>
-                    智能產品評核與對獎系統
+                    智能產品評核與兌獎系統
                   </div>
               </>
           )}
@@ -561,7 +561,7 @@ const VotePage: React.FC = () => {
               <Fireworks />
               <div className="glass-panel p-10 rounded-3xl text-center max-w-md border border-sky-400/50 shadow-2xl">
                   <div className="text-7xl mb-6 animate-bounce">🎁</div>
-                  <h1 className="text-3xl font-black text-[#73c8ce] mb-4">投票與對獎成功！</h1>
+                  <h1 className="text-3xl font-black text-[#73c8ce] mb-4">投票與兌獎成功！</h1>
                   <p className="text-slate-300 text-base mb-2">您的紀念品與評選結果已完美上傳及扣除存量。</p>
                   
                   <div className="my-5 bg-sky-500/10 border border-[#73c8ce]/30 text-[#73c8ce] px-5 py-3 rounded-2xl font-bold inline-block text-sm">
@@ -574,7 +574,7 @@ const VotePage: React.FC = () => {
                     onClick={() => { setJustVoted(false); setSelections({SINGING:null, POPULARITY:null, COSTUME:null}); }}
                     className="bg-gradient-to-r from-sky-400 to-[#202d98] hover:to-sky-500 text-white px-8 py-3 rounded-full text-sm font-bold transition-all active:scale-95 shadow-lg w-full"
                   >
-                    返回前台 (測試多筆量)
+                    返回前台
                   </button>
               </div>
           </div>

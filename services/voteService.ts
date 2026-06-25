@@ -450,13 +450,37 @@ class VoteService {
         if (!staffSnap.exists()) {
             return { success: false, message: "查無此工號，請確認後再試。" };
         }
-        
-        if (staffSnap.val().used === true && !this.isGlobalTestMode) {
-            return { success: false, message: "此工號已參與過投票。" };
-        }
     }
 
     try {
+      // Look up if this staffId has an existing vote so we can overwrite it (後蓋前)
+      let existingVoteId: string | null = null;
+      let existingVoteVal: any = null;
+      const isSpecialOrEmpty = !staffId || isMasterKey || staffId === "ANONYMOUS" || staffId === "anonymous";
+
+      if (needsVerification && !isSpecialOrEmpty) {
+        const voteDetailsSnap = await get(ref(db, 'vote_details'));
+        if (voteDetailsSnap.exists()) {
+          const allVotes = voteDetailsSnap.val() || {};
+          for (const key of Object.keys(allVotes)) {
+            if (allVotes[key].staffId && allVotes[key].staffId.trim().toUpperCase() === staffId) {
+              existingVoteId = key;
+              existingVoteVal = allVotes[key];
+              break;
+            }
+          }
+        }
+      }
+
+      // If overwriting, temporarily refund the old souvenir so that trying to deduct the same or new souvenir works perfectly
+      if (existingVoteVal && existingVoteVal.souvenirId) {
+        const oldSId = existingVoteVal.souvenirId;
+        await runTransaction(ref(db, `souvenirs/${oldSId}/quantity`), (qty) => {
+          if (qty === null) return qty;
+          return qty + 1;
+        });
+      }
+
       let finalSouvenirId = "";
       let finalSouvenirName = "";
       let isBackupUsed = false;
@@ -497,6 +521,14 @@ class VoteService {
       }
 
       if (!deducted) {
+        // Rollback the refund we did earlier if the new deduction failed!
+        if (existingVoteVal && existingVoteVal.souvenirId) {
+          const oldSId = existingVoteVal.souvenirId;
+          await runTransaction(ref(db, `souvenirs/${oldSId}/quantity`), (qty) => {
+            if (qty === null) return qty;
+            return Math.max(0, qty - 1);
+          });
+        }
         return { 
           success: false, 
           message: `很抱歉，您所預設的所有順位紀念品皆已兌換完畢（可能在此刻被其他同仁搶先換完），請重新進行投票選購。` 
@@ -504,7 +536,7 @@ class VoteService {
       }
 
       const updates: any = {};
-      const voteId = this.generateRandomId(20);
+      const voteId = existingVoteId || this.generateRandomId(20);
       
       updates[`vote_details/${voteId}`] = {
         staffId: needsVerification ? staffId : "anonymous",
@@ -525,7 +557,22 @@ class VoteService {
           updates[`staff_list/${staffId}/name`] = voterName;
       }
 
-      // Add vote ticks
+      // Decrement previously chosen candidates if we are overwriting
+      if (existingVoteVal) {
+        const oldCats = [
+          { candidateId: existingVoteVal.singing, field: "scoreSinging" },
+          { candidateId: existingVoteVal.popularity, field: "scorePopularity" },
+          { candidateId: existingVoteVal.costume, field: "scoreCostume" }
+        ];
+        oldCats.forEach(({ candidateId, field }) => {
+          if (candidateId) {
+            updates[`candidates/${candidateId}/${field}`] = increment(-1);
+            updates[`candidates/${candidateId}/voteCount`] = increment(-1);
+          }
+        });
+      }
+
+      // Add vote ticks for the new candidates
       const categories = [VoteCategory.SINGING, VoteCategory.POPULARITY, VoteCategory.COSTUME];
       categories.forEach((cat) => {
         const candidateId = votes[cat];
