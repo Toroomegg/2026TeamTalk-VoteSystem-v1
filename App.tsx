@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { HashRouter, Routes, Route, Link } from 'react-router-dom';
-import { Candidate, VoteCategory, Souvenir, VoteDetail } from './types';
+import { Candidate, VoteCategory, Souvenir, VoteDetail, VoteLog } from './types';
 import { voteService } from './services/voteService';
 import Fireworks from './components/Fireworks';
 
@@ -752,11 +752,12 @@ const ResultsPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [voteDetails, setVoteDetails] = useState<VoteDetail[]>([]);
+  const [voteLogs, setVoteLogs] = useState<VoteLog[]>([]);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [souvenirs, setSouvenirs] = useState<Souvenir[]>([]);
   const [staffRoster, setStaffRoster] = useState<StaffMember[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab ] = useState<'votes' | 'roster'>('votes');
+  const [activeTab, setActiveTab ] = useState<'votes' | 'roster' | 'logs'>('votes');
   const [errorMsg, setErrorMsg] = useState('');
   const [authorizedStaffCount, setAuthorizedStaffCount] = useState(0);
   const [detailPopup, setDetailPopup] = useState<{
@@ -776,6 +777,7 @@ const ResultsPage: React.FC = () => {
     voteService.startAdminPolling();
     const updateData = () => {
       setVoteDetails(voteService.getVoteDetails());
+      setVoteLogs(voteService.getVoteLogs());
       setCandidates(voteService.getCandidates());
       setSouvenirs(voteService.getSouvenirs());
       setAuthorizedStaffCount(voteService.authorizedStaffCount);
@@ -800,7 +802,7 @@ const ResultsPage: React.FC = () => {
     return candidates.find(c => c.id === idToLookUp)?.name || "未知隨機產品";
   };
 
-  const handleExportData = () => {
+  const handleExportData = (type?: 'votes' | 'logs' | 'roster') => {
     const escapeCsvValue = (val: string) => {
       if (val === undefined || val === null) return "";
       const stringified = String(val);
@@ -813,8 +815,9 @@ const ResultsPage: React.FC = () => {
     let headers: string[] = [];
     let rows: string[][] = [];
     let filenamePrefix = "";
+    const targetMode = type || activeTab;
 
-    if (activeTab === 'votes') {
+    if (targetMode === 'votes') {
       if (filteredDetails.length === 0) {
         alert("目前選取的投票投遞詳情無任何資料可供匯出！");
         return;
@@ -844,6 +847,37 @@ const ResultsPage: React.FC = () => {
           detail.souvenirName,
           voteDate,
           detail.ip || ""
+        ];
+      });
+    } else if (targetMode === 'logs') {
+      if (filteredLogs.length === 0) {
+        alert("目前選取的投票歷程Log總表無任何資料可供匯出！");
+        return;
+      }
+      filenamePrefix = "2026_TeamTalk_投票歷程Log總表";
+      headers = [
+        "工號",
+        "姓名",
+        "動作分類",
+        "1. 最佳造型設計產品",
+        "2. 最佳人氣產品",
+        "3. 最有前瞻性產品",
+        "選定紀念品",
+        "記錄時間",
+        "來源IP"
+      ];
+      rows = filteredLogs.map((log) => {
+        const logDate = new Date(log.timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' });
+        return [
+          log.staffId,
+          log.name,
+          log.action,
+          getProductName(log.singing),
+          getProductName(log.popularity),
+          getProductName(log.costume),
+          log.souvenirName,
+          logDate,
+          log.ip || ""
         ];
       });
     } else {
@@ -908,6 +942,13 @@ const ResultsPage: React.FC = () => {
     d.staffId.toLowerCase().includes(searchTerm.toLowerCase()) ||
     d.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     d.souvenirName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const filteredLogs = voteLogs.filter(l =>
+    l.staffId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    l.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    l.souvenirName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    l.action.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const filteredRoster = staffRoster.filter(s =>
@@ -1178,51 +1219,83 @@ const ResultsPage: React.FC = () => {
 
         {/* Voting Data table container */}
         <div className="glass-panel p-6 rounded-3xl border border-slate-800 shadow-2xl">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4 border-b border-slate-800 pb-4">
-            <div>
-              <h2 className="text-xl font-bold text-[#73c8ce] flex items-center gap-2">
-                <span>📋 實時數據查詢與比對系統</span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                {activeTab === 'votes' 
-                  ? '目前正在檢視 [同仁投票與領取詳情] 紀錄表 (由 Real-time Database 實時串接)' 
-                  : '目前正在檢視 [已匯入之專屬准許投票員工名單] 配置 (共 ' + staffRoster.length + ' 人)'}
-              </p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
-              {/* Tab Selector Buttons */}
-              <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex shrink-0">
-                <button 
-                  type="button"
-                  onClick={() => setActiveTab('votes')} 
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'votes' ? 'bg-[#73c8ce] text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
-                >
-                  📥 投票投遞詳情 ({filteredDetails.length})
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setActiveTab('roster')} 
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'roster' ? 'bg-[#73c8ce] text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
-                >
-                  👥 已匯入名單狀態 ({filteredRoster.length})
-                </button>
+          <div className="flex flex-col gap-4 border-b border-slate-800 pb-4 mb-6">
+            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+              <div>
+                <h2 className="text-xl font-bold text-[#73c8ce] flex items-center gap-2">
+                  <span>📋 實時數據查詢與比對系統</span>
+                </h2>
+                <p className="text-xs text-slate-400 mt-1">
+                  {activeTab === 'votes' 
+                    ? '目前正在檢視 [同仁投票與領取詳情] 紀錄表 (由 Real-time Database 實時串接)' 
+                    : activeTab === 'logs'
+                      ? '目前正在檢視 [所有投票動作歷程紀錄 Log 總表] (支援重刷/覆蓋IP比對審計)'
+                      : '目前正在檢視 [已匯入之專屬准許投票員工名單] 配置 (共 ' + staffRoster.length + ' 人)'}
+                </p>
               </div>
+              
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full lg:w-auto">
+                {/* Tab Selector Buttons */}
+                <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex shrink-0">
+                  <button 
+                    type="button"
+                    onClick={() => setActiveTab('votes')} 
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'votes' ? 'bg-[#73c8ce] text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    📥 投票投遞詳情 ({filteredDetails.length})
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setActiveTab('logs')} 
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'logs' ? 'bg-[#73c8ce] text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    📜 歷程Log總表 ({filteredLogs.length})
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setActiveTab('roster')} 
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${activeTab === 'roster' ? 'bg-[#73c8ce] text-slate-950 shadow-md' : 'text-slate-400 hover:text-white'}`}
+                  >
+                    👥 已匯入名單狀態 ({filteredRoster.length})
+                  </button>
+                </div>
 
-              <input 
-                type="text" 
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="搜尋工號、姓名..."
-                className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-[#73c8ce] outline-none w-full sm:w-48"
-              />
+                <input 
+                  type="text" 
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="搜尋工號、姓名..."
+                  className="bg-slate-900 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:border-[#73c8ce] outline-none w-full sm:w-48"
+                />
+              </div>
+            </div>
+
+            {/* Export Actions (下一行) */}
+            <div className="flex flex-wrap items-center gap-3 bg-slate-950/40 p-3 rounded-2xl border border-slate-800/60">
+              <span className="text-xs text-slate-400 font-bold mr-1">📥 數據匯出工具：</span>
+              
+              <button
+                type="button"
+                onClick={() => handleExportData('votes')}
+                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 whitespace-nowrap border border-emerald-500/20"
+              >
+                📊 匯出投票結果 (CSV)
+              </button>
 
               <button
                 type="button"
-                onClick={handleExportData}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 transition-all shadow-md active:scale-95 whitespace-nowrap border border-emerald-500/20"
+                onClick={() => handleExportData('logs')}
+                className="bg-indigo-600 hover:bg-indigo-500 text-white font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 whitespace-nowrap border border-indigo-500/20"
               >
-                📥 匯出 Excel (CSV)
+                📜 匯出歷程Log表 (CSV)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleExportData('roster')}
+                className="bg-slate-700 hover:bg-slate-600 text-slate-200 font-bold px-4 py-2 rounded-xl text-xs flex items-center gap-1.5 transition-all shadow-md active:scale-95 whitespace-nowrap border border-slate-600/20"
+              >
+                👥 匯出員工清單 (CSV)
               </button>
             </div>
           </div>
@@ -1274,6 +1347,62 @@ const ResultsPage: React.FC = () => {
                     <tr>
                        <td colSpan={8} className="text-center py-10 text-slate-500 italic">
                           暫無符合篩選條件的同仁投票數據。可能還沒有同仁完成投票投遞，請至前台提交測試！
+                       </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            ) : activeTab === 'logs' ? (
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="bg-[#11193d] text-slate-400 uppercase text-xs">
+                  <tr>
+                     <th className="px-4 py-3.5">工號</th>
+                     <th className="px-4 py-3.5">姓名</th>
+                     <th className="px-4 py-3.5">動作分類</th>
+                     <th className="px-4 py-3.5">1. 最佳造型設計產品</th>
+                     <th className="px-4 py-3.5">2. 最佳人氣產品</th>
+                     <th className="px-4 py-3.5">3. 最有前瞻性產品</th>
+                     <th className="px-4 py-3.5">選定紀念品</th>
+                     <th className="px-4 py-3.5">IP 來源位址</th>
+                     <th className="px-4 py-3.5">記錄時間</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800 bg-slate-950/40">
+                  {filteredLogs.map((log) => {
+                    return (
+                      <tr key={log.id} className="hover:bg-[#121c4b]/30">
+                         <td className="px-4 py-3.5 font-bold text-sky-300 font-mono">{log.staffId}</td>
+                         <td className="px-4 py-3.5 font-bold text-white">{log.name}</td>
+                         <td className="px-4 py-3.5">
+                            {log.action === '覆蓋更新' ? (
+                              <span className="bg-amber-950/70 border border-amber-500/40 text-amber-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
+                                 🔄 {log.action}
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-950/70 border border-emerald-500/40 text-emerald-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
+                                 ➕ {log.action}
+                              </span>
+                            )}
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(log.singing)}</td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(log.popularity)}</td>
+                         <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(log.costume)}</td>
+                         <td className="px-4 py-3.5">
+                            <span className="bg-sky-950/70 border border-sky-500/30 text-sky-300 px-2 py-1 rounded-md text-xs font-bold">
+                               {log.souvenirName}
+                            </span>
+                         </td>
+                         <td className="px-4 py-3.5 text-xs text-rose-300/85 font-mono">{log.ip}</td>
+                         <td className="px-4 py-3.5 text-xs text-slate-400 font-mono">
+                            {new Date(log.timestamp).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei' })}
+                         </td>
+                      </tr>
+                    );
+                  })}
+                  {filteredLogs.length === 0 && (
+                    <tr>
+                       <td colSpan={9} className="text-center py-10 text-slate-500 italic">
+                          暫無投票歷程 Log 紀錄。同仁投遞票卡後，系統將在此即時保存完整審計歷史！
                        </td>
                     </tr>
                   )}

@@ -37,6 +37,20 @@ export interface VoteDetail {
   timestamp: number;    // 投票時間
 }
 
+export interface VoteLog {
+  id: string;
+  staffId: string;
+  name: string;
+  singing: string;
+  popularity: string;
+  costume: string;
+  souvenirId: string;
+  souvenirName: string;
+  ip: string;
+  timestamp: number;
+  action: string; // "新增投票" | "覆蓋更新"
+}
+
 export interface StaffMember {
   id: string;
   name: string;

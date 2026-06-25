@@ -1,12 +1,13 @@
 import { ref, onValue, set, update, remove, Unsubscribe, get, increment, runTransaction } from "firebase/database";
 import { db } from "./firebase";
-import { Candidate, COLORS, VoteCategory, Souvenir, VoteDetail, StaffMember } from '../types';
+import { Candidate, COLORS, VoteCategory, Souvenir, VoteDetail, StaffMember, VoteLog } from '../types';
 
 class VoteService {
   private listeners: Array<() => void> = [];
   public candidates: Candidate[] = [];
   public souvenirs: Souvenir[] = [];
   public voteDetails: VoteDetail[] = [];
+  public voteLogs: VoteLog[] = [];
   public staffRoster: StaffMember[] = [];
   private unsubs: Unsubscribe[] = [];
   
@@ -88,6 +89,7 @@ class VoteService {
   getCandidates(): Candidate[] { return this.candidates; }
   getSouvenirs(): Souvenir[] { return this.souvenirs; }
   getVoteDetails(): VoteDetail[] { return this.voteDetails; }
+  getVoteLogs(): VoteLog[] { return this.voteLogs; }
   
   hasVoted(): boolean { 
     return false; 
@@ -268,6 +270,26 @@ class VoteService {
       this.notifyListeners();
     });
     this.unsubs.push(unsubVoteDetails);
+
+    const voteLogsRef = ref(db, 'vote_logs');
+    const unsubVoteLogs = onValue(voteLogsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      this.voteLogs = Object.keys(data).map(id => ({
+        id: id,
+        staffId: data[id].staffId || '',
+        name: data[id].name || '',
+        singing: data[id].singing || '',
+        popularity: data[id].popularity || '',
+        costume: data[id].costume || '',
+        souvenirId: data[id].souvenirId || '',
+        souvenirName: data[id].souvenirName || '',
+        ip: data[id].ip || 'Unknown',
+        timestamp: data[id].timestamp || 0,
+        action: data[id].action || '新增投票'
+      })).sort((a, b) => b.timestamp - a.timestamp);
+      this.notifyListeners();
+    });
+    this.unsubs.push(unsubVoteLogs);
 
     const staffListRef = ref(db, 'staff_list');
     const unsubStaffList = onValue(staffListRef, (snapshot) => {
@@ -537,6 +559,9 @@ class VoteService {
 
       const updates: any = {};
       const voteId = existingVoteId || this.generateRandomId(20);
+      const actionType = existingVoteVal ? "覆蓋更新" : "新增投票";
+      const logId = this.generateRandomId(20);
+      const nowMs = Date.now();
       
       updates[`vote_details/${voteId}`] = {
         staffId: needsVerification ? staffId : "anonymous",
@@ -547,7 +572,20 @@ class VoteService {
         souvenirId: finalSouvenirId,
         souvenirName: finalSouvenirName,
         ip: clientIp,
-        timestamp: Date.now()
+        timestamp: nowMs
+      };
+
+      updates[`vote_logs/${logId}`] = {
+        staffId: needsVerification ? staffId : "anonymous",
+        name: voterName || "未備註",
+        singing: votes[VoteCategory.SINGING],
+        popularity: votes[VoteCategory.POPULARITY],
+        costume: votes[VoteCategory.COSTUME],
+        souvenirId: finalSouvenirId,
+        souvenirName: finalSouvenirName,
+        ip: clientIp,
+        timestamp: nowMs,
+        action: actionType
       };
       
       if (isMasterKey) {
@@ -557,34 +595,69 @@ class VoteService {
           updates[`staff_list/${staffId}/name`] = voterName;
       }
 
-      // Decrement previously chosen candidates if we are overwriting
+      // Calculate net changes for candidate statistics to prevent collision / double-counting
+      const candDeltas: Record<string, { scoreSinging: number; scorePopularity: number; scoreCostume: number; voteCount: number }> = {};
+
+      const getOrCreateDelta = (cId: string) => {
+        if (!candDeltas[cId]) {
+          candDeltas[cId] = { scoreSinging: 0, scorePopularity: 0, scoreCostume: 0, voteCount: 0 };
+        }
+        return candDeltas[cId];
+      };
+
+      // 1. If overwriting, subtract the old votes
       if (existingVoteVal) {
-        const oldCats = [
-          { candidateId: existingVoteVal.singing, field: "scoreSinging" },
-          { candidateId: existingVoteVal.popularity, field: "scorePopularity" },
-          { candidateId: existingVoteVal.costume, field: "scoreCostume" }
-        ];
-        oldCats.forEach(({ candidateId, field }) => {
-          if (candidateId) {
-            updates[`candidates/${candidateId}/${field}`] = increment(-1);
-            updates[`candidates/${candidateId}/voteCount`] = increment(-1);
-          }
-        });
+        if (existingVoteVal.singing) {
+          const d = getOrCreateDelta(existingVoteVal.singing);
+          d.scoreSinging -= 1;
+          d.voteCount -= 1;
+        }
+        if (existingVoteVal.popularity) {
+          const d = getOrCreateDelta(existingVoteVal.popularity);
+          d.scorePopularity -= 1;
+          d.voteCount -= 1;
+        }
+        if (existingVoteVal.costume) {
+          const d = getOrCreateDelta(existingVoteVal.costume);
+          d.scoreCostume -= 1;
+          d.voteCount -= 1;
+        }
       }
 
-      // Add vote ticks for the new candidates
-      const categories = [VoteCategory.SINGING, VoteCategory.POPULARITY, VoteCategory.COSTUME];
-      categories.forEach((cat) => {
-        const candidateId = votes[cat];
-        if (!candidateId) return;
-        
-        let field = "";
-        if (cat === VoteCategory.SINGING) field = "scoreSinging";
-        else if (cat === VoteCategory.POPULARITY) field = "scorePopularity";
-        else if (cat === VoteCategory.COSTUME) field = "scoreCostume";
+      // 2. Add the new votes
+      const newSinging = votes[VoteCategory.SINGING];
+      if (newSinging) {
+        const d = getOrCreateDelta(newSinging);
+        d.scoreSinging += 1;
+        d.voteCount += 1;
+      }
+      const newPopularity = votes[VoteCategory.POPULARITY];
+      if (newPopularity) {
+        const d = getOrCreateDelta(newPopularity);
+        d.scorePopularity += 1;
+        d.voteCount += 1;
+      }
+      const newCostume = votes[VoteCategory.COSTUME];
+      if (newCostume) {
+        const d = getOrCreateDelta(newCostume);
+        d.scoreCostume += 1;
+        d.voteCount += 1;
+      }
 
-        updates[`candidates/${candidateId}/${field}`] = increment(1);
-        updates[`candidates/${candidateId}/voteCount`] = increment(1);
+      // 3. Convert non-zero deltas into updates using increment()
+      Object.entries(candDeltas).forEach(([candidateId, deltas]) => {
+        if (deltas.scoreSinging !== 0) {
+          updates[`candidates/${candidateId}/scoreSinging`] = increment(deltas.scoreSinging);
+        }
+        if (deltas.scorePopularity !== 0) {
+          updates[`candidates/${candidateId}/scorePopularity`] = increment(deltas.scorePopularity);
+        }
+        if (deltas.scoreCostume !== 0) {
+          updates[`candidates/${candidateId}/scoreCostume`] = increment(deltas.scoreCostume);
+        }
+        if (deltas.voteCount !== 0) {
+          updates[`candidates/${candidateId}/voteCount`] = increment(deltas.voteCount);
+        }
       });
 
       await update(ref(db), updates);
@@ -628,6 +701,7 @@ class VoteService {
 
     // Clear votes, logs, stats
     updates['vote_details'] = null;
+    updates['vote_logs'] = null;
     updates['stats/masterKeyCount'] = 0;
     
     // Reset souvenirs quantities to default demo counts
