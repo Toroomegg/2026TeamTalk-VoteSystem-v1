@@ -167,7 +167,7 @@ class VoteService {
   }
 
   startPolling() {
-    if (this.unsubs.length > 0) return;
+    this.stopPolling();
 
     // 1. Listen ONLY to settings in real-time (extremely small payload, keeps isVotingOpen/logo/bg live)
     const settingsRef = ref(db, 'settings');
@@ -187,7 +187,7 @@ class VoteService {
   }
 
   startAdminPolling() {
-    if (this.unsubs.length > 0) return;
+    this.stopPolling();
 
     const settingsRef = ref(db, 'settings');
     const unsubSettings = onValue(settingsRef, (snapshot) => {
@@ -719,6 +719,54 @@ class VoteService {
     }
 
     await update(ref(db), updates);
+  }
+
+  async recalculateScoresFromDetails(): Promise<{ success: boolean; message: string }> {
+    try {
+      const candidatesSnap = await get(ref(db, 'candidates'));
+      if (!candidatesSnap.exists()) {
+        return { success: false, message: "查無產品資料，無法進行重新計算。" };
+      }
+      const candidatesData = candidatesSnap.val() || {};
+      const candidateIds = Object.keys(candidatesData);
+
+      const scores: Record<string, { scoreSinging: number; scorePopularity: number; scoreCostume: number; voteCount: number }> = {};
+      candidateIds.forEach(id => {
+        scores[id] = { scoreSinging: 0, scorePopularity: 0, scoreCostume: 0, voteCount: 0 };
+      });
+
+      const voteDetailsSnap = await get(ref(db, 'vote_details'));
+      if (voteDetailsSnap.exists()) {
+        const votesData = voteDetailsSnap.val() || {};
+        Object.values(votesData).forEach((v: any) => {
+          if (v.singing && scores[v.singing]) {
+            scores[v.singing].scoreSinging += 1;
+            scores[v.singing].voteCount += 1;
+          }
+          if (v.popularity && scores[v.popularity]) {
+            scores[v.popularity].scorePopularity += 1;
+            scores[v.popularity].voteCount += 1;
+          }
+          if (v.costume && scores[v.costume]) {
+            scores[v.costume].scoreCostume += 1;
+            scores[v.costume].voteCount += 1;
+          }
+        });
+      }
+
+      const updates: any = {};
+      candidateIds.forEach(id => {
+        updates[`candidates/${id}/scoreSinging`] = scores[id].scoreSinging;
+        updates[`candidates/${id}/scorePopularity`] = scores[id].scorePopularity;
+        updates[`candidates/${id}/scoreCostume`] = scores[id].scoreCostume;
+        updates[`candidates/${id}/voteCount`] = scores[id].voteCount;
+      });
+
+      await update(ref(db), updates);
+      return { success: true, message: "票數統計重整/校正成功！" };
+    } catch (e: any) {
+      return { success: false, message: `統計重整失敗: ${e.message}` };
+    }
   }
 
   // --- Products CRUD (candidates) ---

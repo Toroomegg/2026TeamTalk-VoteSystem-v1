@@ -1847,6 +1847,14 @@ const AdminPage: React.FC = () => {
                             <button onClick={() => setConfirmModal({isOpen: true, title: '歸零重置', message: '確定將所有得票數據清空、活動紀念品剩餘存量重設為初始狀態嗎？', isDangerous: true, onConfirm: async () => { setConfirmModal(p=>({...p, isOpen:false})); setIsSyncing(true); await voteService.resetAllRemoteVotes(); setIsSyncing(false); setResultModal({isOpen:true, msg:'所有數據與紀念品存量皆已成功歸零重設！'}); }})} className="w-full bg-slate-950 border border-slate-800 py-3.5 hover:bg-slate-900 rounded-xl font-bold text-xs">
                                 归零所有得票分數 (重置活動)
                             </button>
+                            <button onClick={async () => {
+                                setIsSyncing(true);
+                                const res = await voteService.recalculateScoresFromDetails();
+                                setIsSyncing(false);
+                                setResultModal({isOpen: true, msg: res.message});
+                            }} disabled={isSyncing} className="w-full bg-indigo-900/60 border border-indigo-500/30 py-3 hover:bg-indigo-950 rounded-xl font-bold text-xs text-indigo-200 transition-colors">
+                                🔄 重新統計與校正候選人票數
+                            </button>
                         </div>
                     </div>
                 </div>
