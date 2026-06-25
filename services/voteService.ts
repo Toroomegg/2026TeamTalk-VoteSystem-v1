@@ -131,6 +131,7 @@ class VoteService {
           id: id,
           name: c.name || 'Unknown',
           song: c.song || '',
+          platform: c.platform || '',
           image: c.image || '',
           videoLink: c.videoLink || '',
           scoreSinging: sSinging,
@@ -509,12 +510,13 @@ class VoteService {
   }
 
   // --- Products CRUD (candidates) ---
-  async saveProduct(id: string, name: string, category: string, image: string): Promise<{ success: boolean; message: string }> {
+  async saveProduct(id: string, name: string, category: string, image: string, platform?: string): Promise<{ success: boolean; message: string }> {
     try {
       const candidateRef = ref(db, `candidates/${id}`);
       await update(candidateRef, {
         name,
         song: category,
+        platform: platform || "",
         image: image || "https://images.unsplash.com/photo-1516280440614-6697288d5d38?auto=format&fit=crop&w=800&q=80"
       });
       return { success: true, message: "產品儲存成功！" };
@@ -523,13 +525,14 @@ class VoteService {
     }
   }
 
-  async addProduct(name: string, category: string, image: string): Promise<{ success: boolean; message: string }> {
+  async addProduct(name: string, category: string, image: string, platform?: string): Promise<{ success: boolean; message: string }> {
     try {
       const id = 'prod_' + Date.now();
       const candidateRef = ref(db, `candidates/${id}`);
       await set(candidateRef, {
         name,
         song: category,
+        platform: platform || "",
         image: image || "https://images.unsplash.com/photo-1516280440614-6697288d5d38?auto=format&fit=crop&w=800&q=80",
         scoreSinging: 0,
         scorePopularity: 0,

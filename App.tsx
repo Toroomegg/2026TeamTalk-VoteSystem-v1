@@ -356,9 +356,17 @@ const CandidateDetailModal: React.FC<{
                     </div>
                 </div>
                 <div className="p-6 text-white col-span-3">
-                    <div className="mb-6">
-                        <p className="text-slate-400 text-sm font-bold uppercase tracking-widest mb-1">產品類別</p>
-                        <p className="text-xl text-[#73c8ce] font-bold">🏷️ {candidate.song}</p>
+                    <div className="mb-6 grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Function</p>
+                            <p className="text-lg text-[#73c8ce] font-bold">🏷️ {candidate.song}</p>
+                        </div>
+                        {candidate.platform && (
+                            <div>
+                                <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-1">Platform</p>
+                                <p className="text-lg text-sky-400 font-bold">💻 {candidate.platform}</p>
+                            </div>
+                        )}
                     </div>
                     {canVote ? (
                         <button 
@@ -650,11 +658,17 @@ const VotePage: React.FC = () => {
                         <option value="" className="bg-[#05081c] text-slate-500">
                            -- 請下拉選擇評選產品 / 機器 --
                         </option>
-                        {candidates.map((c) => (
-                            <option key={c.id} value={c.id} className="bg-[#0c1232] text-white">
-                                {c.name} {c.song ? ` [${c.song}]` : ''}
-                            </option>
-                        ))}
+                        {candidates.map((c) => {
+                            const tags: string[] = [];
+                            if (c.song) tags.push(`Function: ${c.song}`);
+                            if (c.platform) tags.push(`Platform: ${c.platform}`);
+                            const tagStr = tags.length > 0 ? ` [${tags.join(' | ')}]` : '';
+                            return (
+                                <option key={c.id} value={c.id} className="bg-[#0c1232] text-white">
+                                    {c.name}{tagStr}
+                                </option>
+                            );
+                        })}
                     </select>
                     <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-[#73c8ce] text-xs">
                         ▼
@@ -668,11 +682,24 @@ const VotePage: React.FC = () => {
                             <div className="text-sm font-black text-white mt-1">
                                 {getProductName(selections[section.cat])}
                             </div>
-                            {candidates.find(c => c.id === selections[section.cat])?.song && (
-                                <div className="text-[11px] text-[#73c8ce] mt-0.5 font-medium">
-                                    分類: {candidates.find(c => c.id === selections[section.cat])?.song}
-                                </div>
-                            )}
+                            {(() => {
+                                const matched = candidates.find(c => c.id === selections[section.cat]);
+                                if (!matched) return null;
+                                return (
+                                    <div className="flex flex-wrap gap-x-2 gap-y-1 mt-1.5">
+                                        {matched.song && (
+                                            <div className="text-[10px] text-[#73c8ce] font-bold bg-sky-950/40 px-2 py-0.5 rounded border border-sky-500/20">
+                                                Function: {matched.song}
+                                            </div>
+                                        )}
+                                        {matched.platform && (
+                                            <div className="text-[10px] text-teal-400 font-bold bg-teal-950/40 px-2 py-0.5 rounded border border-teal-500/20">
+                                                Platform: {matched.platform}
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })()}
                         </div>
                         <div className="text-sky-400 text-lg bg-sky-950/60 w-8 h-8 rounded-full border border-sky-500/30 flex items-center justify-center font-black shadow-inner">
                            ✓
@@ -1258,6 +1285,9 @@ const ResultsPage: React.FC = () => {
                         {c.song && (
                           <span className="text-[10px] text-slate-500 truncate">({c.song})</span>
                         )}
+                        {c.platform && (
+                          <span className="text-[10px] text-teal-400 font-mono truncate">[{c.platform}]</span>
+                        )}
                       </div>
                       <span className={`font-mono font-bold ${detailPopup.colorClass} text-xs shrink-0`}>{score} 票 ({displayPercent.toFixed(0)}%)</span>
                     </div>
@@ -1302,7 +1332,7 @@ const AdminPage: React.FC = () => {
   const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: () => {}, isDangerous: false });
 
   // Product CRUD form state
-  const [prodForm, setProdForm] = useState({ id: '', name: '', category: '', image: '', mode: 'ADD' });
+  const [prodForm, setProdForm] = useState({ id: '', name: '', category: '', platform: '', image: '', mode: 'ADD' });
   const [sForm, setSForm] = useState({ id: '', name: '', quantity: 100, image: '', mode: 'ADD' });
 
   // Custom Visual Settings
@@ -1339,19 +1369,19 @@ const AdminPage: React.FC = () => {
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prodForm.name.trim() || !prodForm.category.trim()) {
-        alert("產品名稱與類別不能為空！");
+        alert("產品名稱與 Function 不能為空！");
         return;
     }
     setIsSyncing(true);
     let res;
     if (prodForm.mode === 'ADD') {
-        res = await voteService.addProduct(prodForm.name, prodForm.category, prodForm.image);
+        res = await voteService.addProduct(prodForm.name, prodForm.category, prodForm.image, prodForm.platform);
     } else {
-        res = await voteService.saveProduct(prodForm.id, prodForm.name, prodForm.category, prodForm.image);
+        res = await voteService.saveProduct(prodForm.id, prodForm.name, prodForm.category, prodForm.image, prodForm.platform);
     }
     setIsSyncing(false);
     setResultModal({ isOpen: true, msg: res.message });
-    setProdForm({ id: '', name: '', category: '', image: '', mode: 'ADD' });
+    setProdForm({ id: '', name: '', category: '', platform: '', image: '', mode: 'ADD' });
   };
 
   // Souvenir manipulation
@@ -1497,8 +1527,12 @@ const AdminPage: React.FC = () => {
                                 <input type="text" value={prodForm.name} onChange={e => setProdForm({...prodForm, name: e.target.value})} placeholder="例如：量子解密伺服器" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-white text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-slate-400 mb-1">產品類別 / 原創小組</label>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Function (功能分類 / 原創小組)</label>
                                 <input type="text" value={prodForm.category} onChange={e => setProdForm({...prodForm, category: e.target.value})} placeholder="例如：BU1 高階硬體組" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-white text-sm" />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-400 mb-1">Platform (產品平台 / 系統架構)</label>
+                                <input type="text" value={prodForm.platform} onChange={e => setProdForm({...prodForm, platform: e.target.value})} placeholder="例如：SaaS / Hybrid Cloud" className="w-full bg-slate-950 border border-slate-800 p-2.5 rounded-lg text-white text-sm" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-slate-400 mb-1">產品照 URL 地址</label>
@@ -1509,7 +1543,7 @@ const AdminPage: React.FC = () => {
                                     {prodForm.mode === 'ADD' ? '新增此產品' : '儲存產品更新'}
                                 </button>
                                 {prodForm.mode === 'EDIT' && (
-                                    <button type="button" onClick={() => setProdForm({ id: '', name: '', category: '', image: '', mode: 'ADD' })} className="px-4 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm">取消</button>
+                                    <button type="button" onClick={() => setProdForm({ id: '', name: '', category: '', platform: '', image: '', mode: 'ADD' })} className="px-4 py-3 bg-slate-800 hover:bg-slate-700 rounded-xl text-sm">取消</button>
                                 )}
                             </div>
                         </form>
@@ -1585,11 +1619,11 @@ const AdminPage: React.FC = () => {
                                            </div>
                                            <div className="truncate">
                                                <div className="font-bold text-base truncate group-hover:text-[#73c8ce] transition-colors">{c.name}</div>
-                                               <div className="text-xs text-slate-400 font-medium">類別: {c.song}</div>
+                                               <div className="flex flex-wrap gap-x-2 text-xs text-slate-400 font-medium mt-0.5"><span>Function: {c.song}</span>{c.platform && <span className="text-teal-400">| Platform: {c.platform}</span>}</div>
                                            </div>
                                        </div>
                                        <div className="flex items-center gap-3">
-                                            <button onClick={() => setProdForm({ id: c.id, name: c.name, category: c.song, image: c.image || '', mode: 'EDIT' })} className="text-sky-300 hover:text-white px-2 py-1 text-xs bg-sky-950 border border-sky-500/30 rounded-lg">編輯</button>
+                                            <button onClick={() => setProdForm({ id: c.id, name: c.name, category: c.song, platform: c.platform || '', image: c.image || '', mode: 'EDIT' })} className="text-sky-300 hover:text-white px-2 py-1 text-xs bg-sky-950 border border-sky-500/30 rounded-lg">編輯</button>
                                             <button onClick={() => setConfirmModal({isOpen: true, title: '刪除產品', message: `確定刪除產品 「${c.name}」 嗎？`, isDangerous: true, onConfirm: async () => { setConfirmModal(p=>({...p, isOpen:false})); await voteService.deleteCandidate(c.id); }})} className="text-slate-500 hover:text-red-500 font-mono font-bold text-lg px-2">✕</button>
                                        </div>
                                    </div>

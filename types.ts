@@ -1,7 +1,8 @@
 export interface Candidate {
   id: string;
   name: string;        // 產品名稱
-  song: string;        // 產品類別 (相容舊屬性)
+  song: string;        // 產品類別 / Function
+  platform?: string;   // 產品平台 / Platform
   image?: string;      // 產品照 URL
   videoLink?: string;  // 保留相容性
   
