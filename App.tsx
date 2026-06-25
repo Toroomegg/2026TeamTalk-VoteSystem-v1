@@ -1694,7 +1694,7 @@ const AdminPage: React.FC = () => {
             <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-black text-[#73c8ce]">⚙️ TeamTalk 後台維護管理</h1>
-                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.3.3 (更新日期: 2026-06-22)</p>
+                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.4.0 (更新日期: 2026-06-25)</p>
                 </div>
                 <button onClick={() => setIsAuthenticated(false)} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold shadow-md transition-colors">登出</button>
             </div>
