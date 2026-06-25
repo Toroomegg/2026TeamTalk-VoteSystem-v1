@@ -93,7 +93,98 @@ class VoteService {
     return false; 
   }
 
+  async fetchOnce() {
+    try {
+      const statsSnap = await get(ref(db, 'stats'));
+      if (statsSnap.exists()) {
+        const stats = statsSnap.val() || {};
+        this.masterKeyCount = stats.masterKeyCount || 0;
+        this.authorizedStaffCount = stats.authorizedStaffCount || 0;
+      }
+
+      const candidatesSnap = await get(ref(db, 'candidates'));
+      if (candidatesSnap.exists()) {
+        const remoteCandidates = candidatesSnap.val() || {};
+        this.candidates = Object.keys(remoteCandidates).map((id, index) => {
+          const c = remoteCandidates[id];
+          let sSinging = c.scoreSinging || 0;
+          let sPopularity = c.scorePopularity || 0;
+          let sCostume = c.scoreCostume || 0;
+          let vCount = c.voteCount || 0;
+
+          return {
+            id: id,
+            name: c.name || 'Unknown',
+            song: c.song || '',
+            platform: c.platform || '',
+            image: c.image || '',
+            videoLink: c.videoLink || '',
+            scoreSinging: sSinging,
+            scorePopularity: sPopularity,
+            scoreCostume: sCostume,
+            totalScore: sSinging + sPopularity + sCostume,
+            voteCount: vCount,
+            color: COLORS[index % COLORS.length]
+          };
+        });
+      }
+
+      const souvenirsSnap = await get(ref(db, 'souvenirs'));
+      if (souvenirsSnap.exists()) {
+        const data = souvenirsSnap.val() || {};
+        this.souvenirs = Object.keys(data).map(id => ({
+          id: id,
+          name: data[id].name || 'Unknown',
+          quantity: typeof data[id].quantity === 'number' ? data[id].quantity : 0,
+          image: data[id].image || ''
+        }));
+      }
+
+      this.notifyListeners();
+    } catch (e) {
+      console.error("fetchOnce failed:", e);
+    }
+  }
+
+  async fetchSouvenirsOnce() {
+    try {
+      const souvenirsSnap = await get(ref(db, 'souvenirs'));
+      if (souvenirsSnap.exists()) {
+        const data = souvenirsSnap.val() || {};
+        this.souvenirs = Object.keys(data).map(id => ({
+          id: id,
+          name: data[id].name || 'Unknown',
+          quantity: typeof data[id].quantity === 'number' ? data[id].quantity : 0,
+          image: data[id].image || ''
+        }));
+        this.notifyListeners();
+      }
+    } catch (e) {
+      console.error("fetchSouvenirsOnce failed:", e);
+    }
+  }
+
   startPolling() {
+    if (this.unsubs.length > 0) return;
+
+    // 1. Listen ONLY to settings in real-time (extremely small payload, keeps isVotingOpen/logo/bg live)
+    const settingsRef = ref(db, 'settings');
+    const unsubSettings = onValue(settingsRef, (snapshot) => {
+      const settings = snapshot.val() || {};
+      this.isGlobalTestMode = settings.isGlobalTestMode || false;
+      this.isVotingOpen = settings.isVotingOpen !== false; 
+      this.useStaffVerification = settings.useStaffVerification !== false;
+      this.logoUrl = settings.logoUrl || "";
+      this.bgUrl = settings.bgUrl || "";
+      this.notifyListeners();
+    });
+    this.unsubs.push(unsubSettings);
+
+    // 2. Fetch all other structural data once via single `get()` to prevent active sockets overhead
+    this.fetchOnce();
+  }
+
+  startAdminPolling() {
     if (this.unsubs.length > 0) return;
 
     const settingsRef = ref(db, 'settings');

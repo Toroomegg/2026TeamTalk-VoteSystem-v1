@@ -517,7 +517,10 @@ const VotePage: React.FC = () => {
       setVoterStaffId(staffId);
       setVoterName(name);
       setIsStaffIdModalOpen(false);
-      setIsSouvenirModalOpen(true);
+      // Fetch latest souvenirs once dynamically on-demand to guarantee real-time stock levels
+      voteService.fetchSouvenirsOnce().then(() => {
+          setIsSouvenirModalOpen(true);
+      });
   };
 
   // Step 3: submit full payload (vote answers + verified staff info + chosen souvenir) to Firebase 
@@ -769,7 +772,8 @@ const ResultsPage: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    voteService.startPolling();
+    // Admins use startAdminPolling to watch live votes and roster state updates in real-time
+    voteService.startAdminPolling();
     const updateData = () => {
       setVoteDetails(voteService.getVoteDetails());
       setCandidates(voteService.getCandidates());
@@ -1453,7 +1457,8 @@ const AdminPage: React.FC = () => {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    voteService.startPolling();
+    // Admins use startAdminPolling to watch live votes and roster state updates in real-time
+    voteService.startAdminPolling();
     const update = () => {
         setCandidates(voteService.getCandidates());
         setSouvenirs(voteService.getSouvenirs());
