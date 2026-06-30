@@ -589,7 +589,7 @@ const VotePage: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-64 px-2 md:px-4 relative z-10 pt-[11rem] md:pt-[13.5rem] bg-transparent text-white">
-      <Header subtitle={isVotingOpen ? "BU1, BU11, BU15 Automotive Bus 未來駕馭科技展" : "產品大賞目錄預覽"} size="small" />
+      <Header subtitle={isVotingOpen ? "BU1, BU11, BU15 Automotive BUs 未來駕馭科技展" : "BU1, BU11, BU15 Automotive BUs 未來駕馭科技展"} size="small" />
       
       {!isVotingOpen && (
           <div className="max-w-xl mx-auto mb-6">
@@ -1694,7 +1694,7 @@ const AdminPage: React.FC = () => {
             <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-black text-[#73c8ce]">⚙️ TeamTalk 後台維護管理</h1>
-                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.4.0 (更新日期: 2026-06-25)</p>
+                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.4.1 (更新日期: 2026-06-30)</p>
                 </div>
                 <button onClick={() => setIsAuthenticated(false)} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold shadow-md transition-colors">登出</button>
             </div>
