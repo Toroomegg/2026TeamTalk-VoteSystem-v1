@@ -486,7 +486,6 @@ const VotePage: React.FC = () => {
   }, []);
 
   const handleSelect = (category: VoteCategory, candidateId: string | null) => {
-      if (!isVotingOpen) return;
       setSelections(prev => ({ ...prev, [category]: candidateId || null }));
   };
 
@@ -594,8 +593,8 @@ const VotePage: React.FC = () => {
       {!isVotingOpen && (
           <div className="max-w-xl mx-auto mb-6">
               <div className="bg-amber-500/20 border border-amber-500/50 p-4 rounded-2xl flex items-center justify-center gap-3">
-                  <span className="text-2xl">⏳</span>
-                  <p className="text-amber-200 font-bold text-sm">評選通道尚未開啟，請留意活動現場提示</p>
+                  <span className="text-2xl">👀</span>
+                  <p className="text-amber-200 font-bold text-sm">評選通道已關閉（或尚未開啟），目前僅開放下拉選單預覽產品與機器資訊</p>
               </div>
           </div>
       )}
@@ -654,7 +653,6 @@ const VotePage: React.FC = () => {
                     <select
                         id={`select-${section.cat}`}
                         value={selections[section.cat] || ""}
-                        disabled={!isVotingOpen}
                         onChange={(e) => handleSelect(section.cat, e.target.value || null)}
                         className="w-full bg-[#05081c]/95 border border-slate-700/80 text-[#73c8ce] rounded-2xl px-5 py-4 text-sm font-bold focus:outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-500/20 transition-all appearance-none cursor-pointer shadow-lg tracking-wide pr-10"
                     >
