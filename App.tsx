@@ -431,7 +431,7 @@ const Header: React.FC<{ subtitle?: string; size?: 'small' | 'large' }> = ({ sub
               </>
           )}
       </div>
-      {subtitle && <p className="text-sky-200 mt-1 font-medium tracking-[0.2em] text-xs md:text-sm drop-shadow-md text-center">&mdash; {subtitle} &mdash;</p>}
+      {subtitle && <p className="text-sky-200 mt-1 font-medium tracking-normal min-[375px]:tracking-wider sm:tracking-[0.2em] text-[10px] min-[375px]:text-xs md:text-sm drop-shadow-md text-center px-2">&mdash; {subtitle} &mdash;</p>}
     </header>
   );
 };
