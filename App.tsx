@@ -589,7 +589,7 @@ const VotePage: React.FC = () => {
 
   return (
     <div className="min-h-screen pb-64 px-2 md:px-4 relative z-10 pt-[11rem] md:pt-[13.5rem] bg-transparent text-white">
-      <Header subtitle={isVotingOpen ? "BU1, BU11, BU15 高科技產品大賞" : "產品大賞目錄預覽"} size="small" />
+      <Header subtitle={isVotingOpen ? "BU1, BU11, BU15 Automotive Bus 未來駕馭科技展" : "產品大賞目錄預覽"} size="small" />
       
       {!isVotingOpen && (
           <div className="max-w-xl mx-auto mb-6">
