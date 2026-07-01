@@ -35,6 +35,7 @@ export interface VoteDetail {
   souvenirName: string; // 選擇的紀念品名稱
   ip: string;           // 投票者 IP
   timestamp: number;    // 投票時間
+  isOutOfStockSuccess?: boolean;
 }
 
 export interface VoteLog {
@@ -49,6 +50,7 @@ export interface VoteLog {
   ip: string;
   timestamp: number;
   action: string; // "新增投票" | "覆蓋更新"
+  isOutOfStockSuccess?: boolean;
 }
 
 export interface StaffMember {

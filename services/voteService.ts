@@ -265,7 +265,8 @@ class VoteService {
         souvenirId: data[id].souvenirId || '',
         souvenirName: data[id].souvenirName || '',
         ip: data[id].ip || 'Unknown',
-        timestamp: data[id].timestamp || 0
+        timestamp: data[id].timestamp || 0,
+        isOutOfStockSuccess: !!data[id].isOutOfStockSuccess
       })).sort((a, b) => b.timestamp - a.timestamp);
       this.notifyListeners();
     });
@@ -285,7 +286,8 @@ class VoteService {
         souvenirName: data[id].souvenirName || '',
         ip: data[id].ip || 'Unknown',
         timestamp: data[id].timestamp || 0,
-        action: data[id].action || '新增投票'
+        action: data[id].action || '新增投票',
+        isOutOfStockSuccess: !!data[id].isOutOfStockSuccess
       })).sort((a, b) => b.timestamp - a.timestamp);
       this.notifyListeners();
     });
@@ -454,7 +456,7 @@ class VoteService {
     backupSouvenirId?: string | null,
     backupSouvenirName?: string | null,
     preferredSouvenirIds?: string[]
-  ): Promise<{ success: boolean; message?: string; chosenSouvenirName?: string }> {
+  ): Promise<{ success: boolean; message?: string; chosenSouvenirName?: string; isOutOfStockSuccess?: boolean }> {
     if (!this.isVotingOpen) return { success: false, message: "投票通道已關閉。" };
     
     const staffId = rawStaffId.trim().toUpperCase();
@@ -495,7 +497,8 @@ class VoteService {
       }
 
       // If overwriting, temporarily refund the old souvenir so that trying to deduct the same or new souvenir works perfectly
-      if (existingVoteVal && existingVoteVal.souvenirId) {
+      // Only refund if the previous vote was NOT an out-of-stock success (which didn't deduct anything initially)
+      if (existingVoteVal && existingVoteVal.souvenirId && !existingVoteVal.isOutOfStockSuccess) {
         const oldSId = existingVoteVal.souvenirId;
         await runTransaction(ref(db, `souvenirs/${oldSId}/quantity`), (qty) => {
           if (qty === null) return qty;
@@ -507,6 +510,7 @@ class VoteService {
       let finalSouvenirName = "";
       let isBackupUsed = false;
       let deducted = false;
+      let isOutOfStockSuccess = false;
 
       // If preferredSouvenirIds list is passed, we try each one in sequence.
       if (preferredSouvenirIds && preferredSouvenirIds.length > 0) {
@@ -522,6 +526,19 @@ class VoteService {
               isBackupUsed = i > 0;
               break;
             }
+          }
+        }
+
+        if (!deducted) {
+          isOutOfStockSuccess = true;
+          const sId = preferredSouvenirIds[0];
+          const souvenirObj = this.souvenirs.find(s => s.id === sId);
+          if (souvenirObj) {
+            finalSouvenirId = sId;
+            finalSouvenirName = souvenirObj.name;
+          } else {
+            finalSouvenirId = souvenirId;
+            finalSouvenirName = souvenirName;
           }
         }
       } else {
@@ -540,21 +557,12 @@ class VoteService {
             isBackupUsed = true;
           }
         }
-      }
 
-      if (!deducted) {
-        // Rollback the refund we did earlier if the new deduction failed!
-        if (existingVoteVal && existingVoteVal.souvenirId) {
-          const oldSId = existingVoteVal.souvenirId;
-          await runTransaction(ref(db, `souvenirs/${oldSId}/quantity`), (qty) => {
-            if (qty === null) return qty;
-            return Math.max(0, qty - 1);
-          });
+        if (!deducted) {
+          isOutOfStockSuccess = true;
+          finalSouvenirId = souvenirId;
+          finalSouvenirName = souvenirName;
         }
-        return { 
-          success: false, 
-          message: `很抱歉，您所預設的所有順位紀念品皆已兌換完畢（可能在此刻被其他同仁搶先換完），請重新進行投票選購。` 
-        };
       }
 
       const updates: any = {};
@@ -572,7 +580,8 @@ class VoteService {
         souvenirId: finalSouvenirId,
         souvenirName: finalSouvenirName,
         ip: clientIp,
-        timestamp: nowMs
+        timestamp: nowMs,
+        isOutOfStockSuccess: isOutOfStockSuccess
       };
 
       updates[`vote_logs/${logId}`] = {
@@ -585,7 +594,8 @@ class VoteService {
         souvenirName: finalSouvenirName,
         ip: clientIp,
         timestamp: nowMs,
-        action: actionType
+        action: actionType,
+        isOutOfStockSuccess: isOutOfStockSuccess
       };
       
       if (isMasterKey) {
@@ -664,7 +674,8 @@ class VoteService {
       
       return { 
         success: true, 
-        chosenSouvenirName: finalSouvenirName 
+        chosenSouvenirName: finalSouvenirName,
+        isOutOfStockSuccess: isOutOfStockSuccess
       };
     } catch (e: any) {
       return { success: false, message: e.message };

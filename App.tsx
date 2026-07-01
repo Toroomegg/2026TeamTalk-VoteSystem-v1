@@ -162,11 +162,11 @@ const SouvenirSelectionModal: React.FC<{
     if (!isOpen) return null;
 
     const selectedSouvenir = souvenirs.find(s => s.id === selectedId);
-    const availableSouvenirs = souvenirs.filter(s => s.quantity > 0);
+    const availableSouvenirs = souvenirs; // 顯示所有紀念品，即便數量為 0
 
     const renderBackupSelectors = () => {
         if (!selectedId) return null;
-        if (!selectedSouvenir || selectedSouvenir.quantity > 10) return null;
+        if (!selectedSouvenir || selectedSouvenir.quantity <= 0 || selectedSouvenir.quantity > 10) return null;
 
         const selectors: React.ReactNode[] = [];
         let currentChoices = [selectedId, ...backupChoices];
@@ -253,14 +253,22 @@ const SouvenirSelectionModal: React.FC<{
                 <h3 className="text-2xl font-black text-center mb-1 text-[#73c8ce]">🎁 恭喜！選擇您的活動紀念品</h3>
                 <p className="text-slate-400 text-center text-xs mb-6">每位員工限領一份，送出後即時扣減存量</p>
                 
+                {souvenirs.length > 0 && souvenirs.every(s => s.quantity <= 0) && (
+                    <div className="bg-rose-950/40 border border-rose-500/30 text-rose-300 p-4 rounded-2xl mb-5 text-xs text-left leading-relaxed">
+                        <span className="font-bold text-rose-400 block mb-1">📢 現場紀念品已全數兌換完畢：</span>
+                        今日現場準備的所有紀念品已全數兌換完畢，但您仍可在此點選您喜愛的紀念品。系統將會為您進行「補發」登記，日後添購完成後將另行發送給您！
+                    </div>
+                )}
+                
                 {availableSouvenirs.length === 0 ? (
                     <div className="text-center p-6 text-slate-400 font-bold border border-slate-800 rounded-2xl mb-6 bg-slate-900/30">
-                        🎁 很抱歉，今日現場所有紀念品皆已兌換完畢！
+                        🎁 暫無紀念品品項可供選擇
                     </div>
                 ) : (
                     <div className="space-y-3 mb-6">
                         {availableSouvenirs.map((s) => {
                             const isSelected = selectedId === s.id;
+                            const isOutOfStock = s.quantity <= 0;
                             return (
                                 <div 
                                     key={s.id}
@@ -286,13 +294,21 @@ const SouvenirSelectionModal: React.FC<{
                                         )}
                                         <div className="truncate">
                                             <div className={`font-bold text-sm truncate ${isSelected ? 'text-[#73c8ce]' : 'text-white'}`}>{s.name}</div>
-                                            <div className="text-[10px] text-slate-400">目前現場限量供應</div>
+                                            <div className="text-[10px] text-slate-400">
+                                                {isOutOfStock ? '此品項現場無存量，送出後將登記補發' : '目前現場限量供應'}
+                                            </div>
                                         </div>
                                     </div>
-                                    <div className="text-right">
-                                        <span className={`text-sm font-black font-mono ${isSelected ? 'text-[#73c8ce]' : 'text-sky-300'}`}>
-                                            剩餘 {s.quantity} 份
-                                        </span>
+                                    <div className="text-right shrink-0 ml-2">
+                                        {isOutOfStock ? (
+                                            <span className="text-[10px] bg-rose-950/75 border border-rose-500/40 text-rose-300 px-2.5 py-1 rounded-full font-bold">
+                                                🔴 登記補發
+                                            </span>
+                                        ) : (
+                                            <span className={`text-sm font-black font-mono ${isSelected ? 'text-[#73c8ce]' : 'text-sky-300'}`}>
+                                                剩餘 {s.quantity} 份
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             );
@@ -455,6 +471,7 @@ const VotePage: React.FC = () => {
   const [clientIp, setClientIp] = useState("Unknown");
   const [justVoted, setJustVoted] = useState(false);
   const [finalAwardedName, setFinalAwardedName] = useState('');
+  const [isOutOfStockSuccess, setIsOutOfStockSuccess] = useState(false);
 
   const [detailModal, setDetailModal] = useState<{ candidate: Candidate | null, category: VoteCategory | null, categoryTitle: string } | null>(null);
 
@@ -547,6 +564,7 @@ const VotePage: React.FC = () => {
       if (result.success) {
           setIsSouvenirModalOpen(false);
           setFinalAwardedName(result.chosenSouvenirName || souvenirName);
+          setIsOutOfStockSuccess(!!result.isOutOfStockSuccess);
           setJustVoted(true);
           window.scrollTo({ top: 0, behavior: 'smooth' });
       } else {
@@ -559,12 +577,24 @@ const VotePage: React.FC = () => {
           <div className="min-h-screen flex items-center justify-center px-4 relative z-10 bg-transparent">
               <Fireworks />
               <div className="glass-panel p-10 rounded-3xl text-center max-w-md border border-sky-400/50 shadow-2xl">
-                  <div className="text-7xl mb-6 animate-bounce">🎁</div>
-                  <h1 className="text-3xl font-black text-[#73c8ce] mb-4">投票與兌獎成功！</h1>
-                  <p className="text-slate-300 text-base mb-2">您的紀念品與評選結果已完美上傳及扣除存量。</p>
+                  {isOutOfStockSuccess ? (
+                      <>
+                          <div className="text-7xl mb-6 animate-bounce">🎁</div>
+                          <h1 className="text-3xl font-black text-[#73c8ce] mb-4">投票成功！</h1>
+                          <p className="text-amber-300 font-bold text-sm mb-4 leading-relaxed text-left border border-amber-500/30 bg-amber-500/10 p-4 rounded-2xl">
+                              很抱歉，您所預設的所有順位紀念品皆已兌換完畢（可能在此刻被其他同仁搶先換完），但我們將紀錄您所選的紀念品，日後會再添購發送。
+                          </p>
+                      </>
+                  ) : (
+                      <>
+                          <div className="text-7xl mb-6 animate-bounce">🎁</div>
+                          <h1 className="text-3xl font-black text-[#73c8ce] mb-4">投票與兌獎成功！</h1>
+                          <p className="text-slate-300 text-base mb-2">您的紀念品與評選結果已完美上傳及扣除存量。</p>
+                      </>
+                  )}
                   
                   <div className="my-5 bg-sky-500/10 border border-[#73c8ce]/30 text-[#73c8ce] px-5 py-3 rounded-2xl font-bold inline-block text-sm">
-                     已鎖定兌換：{finalAwardedName || "選定的紀念品"}
+                     已紀錄/鎖定：{finalAwardedName || "選定的紀念品"}
                   </div>
 
                   <p className="text-xs text-slate-500 mb-8 font-mono">您的來源 IP: {clientIp}</p>
@@ -829,6 +859,7 @@ const ResultsPage: React.FC = () => {
         "2. 最佳人氣產品",
         "3. 最有前瞻性產品 (原造型)",
         "選定紀念品",
+        "是否為缺貨補發",
         "投票時間",
         "投票來源IP"
       ];
@@ -843,6 +874,7 @@ const ResultsPage: React.FC = () => {
           getProductName(detail.popularity),
           getProductName(detail.costume),
           detail.souvenirName,
+          detail.isOutOfStockSuccess ? "是 (補發)" : "否 (正常扣減)",
           voteDate,
           detail.ip || ""
         ];
@@ -861,6 +893,7 @@ const ResultsPage: React.FC = () => {
         "2. 最佳人氣產品",
         "3. 最有前瞻性產品",
         "選定紀念品",
+        "是否為缺貨補發",
         "記錄時間",
         "來源IP"
       ];
@@ -874,6 +907,7 @@ const ResultsPage: React.FC = () => {
           getProductName(log.popularity),
           getProductName(log.costume),
           log.souvenirName,
+          log.isOutOfStockSuccess ? "是 (補發)" : "否 (正常扣減)",
           logDate,
           log.ip || ""
         ];
@@ -890,6 +924,7 @@ const ResultsPage: React.FC = () => {
         "部門標籤 / 類別",
         "認證權限狀態",
         "投票/領取狀態",
+        "是否為缺貨補發",
         "1. 最佳造型設計產品",
         "2. 最佳人氣產品",
         "3. 最有前瞻性產品",
@@ -906,6 +941,7 @@ const ResultsPage: React.FC = () => {
           member.tag || "",
           "允許驗證投票",
           member.used ? "已經完成投遞 (已扣除紀念品)" : "尚未參與投遞",
+          detail ? (detail.isOutOfStockSuccess ? "是 (補發)" : "否 (正常扣減)") : "",
           detail ? getProductName(detail.singing) : "",
           detail ? getProductName(detail.popularity) : "",
           detail ? getProductName(detail.costume) : "",
@@ -1204,12 +1240,17 @@ const ResultsPage: React.FC = () => {
         {/* Real-time Souvenirs inventory summary */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {souvenirs.map(s => {
-             const issued = voteDetails.filter(d => d.souvenirId === s.id).length;
+             const matchingVotes = voteDetails.filter(d => d.souvenirId === s.id);
+             const normalIssued = matchingVotes.filter(d => !d.isOutOfStockSuccess).length;
+             const outOfStockIssued = matchingVotes.filter(d => d.isOutOfStockSuccess).length;
              return (
                <div key={s.id} className="glass-panel p-5 rounded-2xl border border-sky-500/20 text-center">
                  <div className="text-slate-400 text-xs font-bold uppercase mb-1">🎁 {s.name}</div>
                  <div className="text-2xl font-black text-sky-300 font-mono">{s.quantity} <span className="text-xs text-slate-500">份剩餘</span></div>
-                 <div className="text-xs text-slate-500 mt-1">現場已成功兌換：{issued} 份</div>
+                 <div className="text-xs text-slate-400 mt-1.5 flex justify-center gap-3">
+                   <span>正常領取: <strong className="text-emerald-400 font-mono">{normalIssued}</strong></span>
+                   <span>補發登記: <strong className="text-[#ff7878] font-mono">{outOfStockIssued}</strong></span>
+                 </div>
                </div>
              )
           })}
@@ -1321,13 +1362,21 @@ const ResultsPage: React.FC = () => {
                          <td className="px-4 py-3.5 font-bold text-sky-300 font-mono">{detail.staffId}</td>
                          <td className="px-4 py-3.5 font-bold text-white">{detail.name}</td>
                          <td className="px-4 py-3.5">
-                            {memberInfo?.tag ? (
-                              <span className="bg-indigo-950/70 border border-indigo-500/40 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
-                                 🏷️ {memberInfo.tag}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600 font-mono text-xs">-</span>
-                            )}
+                            <div className="flex flex-wrap gap-1 items-center">
+                               {memberInfo?.tag && (
+                                 <span className="bg-indigo-950/70 border border-indigo-500/40 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
+                                    🏷️ {memberInfo.tag}
+                                 </span>
+                               )}
+                               {detail.isOutOfStockSuccess && (
+                                 <span className="bg-rose-950/80 border border-rose-500/50 text-rose-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm animate-pulse">
+                                    🔴 補發
+                                  </span>
+                               )}
+                               {!memberInfo?.tag && !detail.isOutOfStockSuccess && (
+                                 <span className="text-slate-600 font-mono text-xs">-</span>
+                               )}
+                            </div>
                          </td>
                          <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.singing)}</td>
                          <td className="px-4 py-3.5 text-xs text-slate-300">{getProductName(detail.popularity)}</td>
@@ -1430,13 +1479,21 @@ const ResultsPage: React.FC = () => {
                          <td className="px-4 py-3.5 font-bold text-[#73c8ce] font-mono">{member.id}</td>
                          <td className="px-4 py-3.5 font-bold text-white">{member.name || '（未註明姓名，僅憑此工號登入）'}</td>
                          <td className="px-4 py-3.5">
-                            {member.tag ? (
-                              <span className="bg-indigo-950/70 border border-indigo-500/40 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
-                                 🏷️ {member.tag}
-                              </span>
-                            ) : (
-                              <span className="text-slate-600 font-mono text-xs">-</span>
-                            )}
+                            <div className="flex flex-wrap gap-1 items-center">
+                               {member.tag && (
+                                 <span className="bg-indigo-950/70 border border-indigo-500/40 text-indigo-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm">
+                                    🏷️ {member.tag}
+                                 </span>
+                               )}
+                               {detail?.isOutOfStockSuccess && (
+                                 <span className="bg-rose-950/80 border border-rose-500/50 text-rose-300 px-2.5 py-0.5 rounded-full text-xs font-black whitespace-nowrap shadow-sm animate-pulse">
+                                    🔴 補發
+                                 </span>
+                               )}
+                               {!member.tag && !detail?.isOutOfStockSuccess && (
+                                 <span className="text-slate-600 font-mono text-xs">-</span>
+                               )}
+                            </div>
                          </td>
                          <td className="px-4 py-3.5">
                             <span className="bg-emerald-950/70 border border-emerald-500/30 text-emerald-400 px-2 py-0.5 rounded-full text-xs font-bold whitespace-nowrap">
@@ -1692,7 +1749,7 @@ const AdminPage: React.FC = () => {
             <div className="flex justify-between items-center mb-10 border-b border-white/10 pb-6">
                 <div>
                     <h1 className="text-3xl font-black text-[#73c8ce]">⚙️ TeamTalk 後台維護管理</h1>
-                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.4.1 (更新日期: 2026-06-30)</p>
+                    <p className="text-xs text-slate-400 mt-1.5 font-mono">系統目前版本：v1.5.0 (更新日期: 2026-07-01)</p>
                 </div>
                 <button onClick={() => setIsAuthenticated(false)} className="bg-red-600 hover:bg-red-500 px-6 py-2 rounded-lg font-bold shadow-md transition-colors">登出</button>
             </div>
